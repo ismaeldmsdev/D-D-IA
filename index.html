@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>D&D AI — RPG de Texto</title>
+
+  <!-- Modo app al añadir a pantalla de inicio -->
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Crónicas del Abismo" />
+  <link rel="apple-touch-icon" href="logo.png" />
+  <link rel="apple-touch-icon" sizes="152x152" href="logo.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="logo.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="logo.png" />
+  <link rel="manifest" href="manifest.json" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Lora:ital,wght@0,400;0,600;1,400&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <header class="game-header">
+    <div class="header-ornament">⚔</div>
+    <h1 class="game-title">D&D IA</h1>
+    <div class="header-ornament">⚔</div>
+    <button type="button" class="theme-toggle-btn" id="theme-toggle"
+      title="Cambiar tema" aria-label="Cambiar tema claro/oscuro">🕯</button>
+  </header>
+
+  <main class="game-layout">
+
+    <!-- ═══════════════════════════════════════════════
+         COLUMNA IZQUIERDA — Hoja de Personaje
+    ════════════════════════════════════════════════ -->
+    <aside class="panel panel-character">
+
+      <div class="panel-header">
+        <span class="panel-icon">🧙</span>
+        <h2>Hoja de Personaje</h2>
+      </div>
+
+      <div id="char-sheet-avatar" class="char-sheet-avatar avatar-frame">
+        <img id="player-sheet-avatar-img" class="avatar-img" src="img/protagonistas/guerrero.png" alt="Avatar del personaje" />
+      </div>
+
+      <!-- Identidad -->
+      <div class="char-identity">
+        <div class="field-group">
+          <label for="char-name">Nombre del Personaje</label>
+          <input type="text" id="char-name" placeholder="Sin nombre..." maxlength="40" />
+        </div>
+        <div class="field-row">
+          <div class="field-group">
+            <label for="char-class">Clase</label>
+            <input type="text" id="char-class" placeholder="Guerrero..." maxlength="20" />
+          </div>
+          <div class="field-group field-narrow">
+            <label for="char-level">Nivel</label>
+            <input type="number" id="char-level" value="1" min="1" max="20" readonly />
+          </div>
+        </div>
+      </div>
+
+      <!-- Puntos de Vida -->
+      <div class="hp-section">
+        <div class="hp-header">
+          <span class="hp-label">❤ Puntos de Vida</span>
+          <div class="hp-inputs">
+            <input type="number" id="hp-current" value="10" min="0" title="HP actual" readonly />
+            <span class="hp-sep">/</span>
+            <input type="number" id="hp-max" value="10" min="1" title="HP máximo" readonly />
+          </div>
+        </div>
+        <div class="hp-bar-track">
+          <div class="hp-bar-fill" id="hp-bar"></div>
+        </div>
+        <div class="hp-percent" id="hp-percent">100%</div>
+      </div>
+
+      <!-- Experiencia y Progresión de Nivel -->
+      <div class="xp-section">
+        <div class="xp-header">
+          <span class="xp-label">⭐ Experiencia</span>
+          <div class="xp-inputs">
+            <input type="number" id="xp-current" value="0" min="0" placeholder="0" readonly />
+            <span class="xp-sep">/</span>
+            <span class="xp-next-val" id="xp-next">300</span>
+            <span class="xp-unit">XP</span>
+          </div>
+        </div>
+        <div class="xp-bar-track">
+          <div class="xp-bar-fill" id="xp-bar"></div>
+        </div>
+        <div class="xp-info-row">
+          <span class="xp-percent" id="xp-percent">0%</span>
+          <span class="prof-bonus-display">Competencia: <strong id="prof-bonus-val">+2</strong></span>
+        </div>
+      </div>
+
+      <!-- Atributos -->
+      <div class="stats-section" id="stats-section">
+        <h3 class="section-label">⚡ Atributos</h3>
+
+        <!-- Banner ASI — visible solo cuando hay puntos para distribuir -->
+        <div class="alloc-banner" id="alloc-banner" aria-live="polite">
+          <span class="alloc-banner-icon">✨</span>
+          <div class="alloc-banner-text">
+            <strong>¡Mejora de Atributo!</strong>
+            <span>Distribuye <span id="alloc-points">2</span> punto(s)</span>
+          </div>
+        </div>
+
+        <div class="stats-grid">
+
+          <div class="stat-block" data-stat="str">
+            <div class="stat-names">
+              <span class="stat-abbr">FUE</span>
+              <span class="stat-full">Fuerza</span>
+            </div>
+            <div class="stat-controls">
+              <input type="number" class="stat-value" id="stat-str" value="10" min="1" max="20" readonly />
+              <span class="stat-mod" id="mod-str">+0</span>
+              <button type="button" class="btn-stat-plus" data-stat="str" style="display:none;" aria-label="Asignar punto a Fuerza">+</button>
+            </div>
+            <button type="button" class="roll-btn" data-stat="str" data-label="Fuerza">🎲 D20</button>
+          </div>
+
+          <div class="stat-block" data-stat="dex">
+            <div class="stat-names">
+              <span class="stat-abbr">DES</span>
+              <span class="stat-full">Destreza</span>
+            </div>
+            <div class="stat-controls">
+              <input type="number" class="stat-value" id="stat-dex" value="10" min="1" max="20" readonly />
+              <span class="stat-mod" id="mod-dex">+0</span>
+              <button type="button" class="btn-stat-plus" data-stat="dex" style="display:none;" aria-label="Asignar punto a Destreza">+</button>
+            </div>
+            <button type="button" class="roll-btn" data-stat="dex" data-label="Destreza">🎲 D20</button>
+          </div>
+
+          <div class="stat-block" data-stat="con">
+            <div class="stat-names">
+              <span class="stat-abbr">CON</span>
+              <span class="stat-full">Constitución</span>
+            </div>
+            <div class="stat-controls">
+              <input type="number" class="stat-value" id="stat-con" value="10" min="1" max="20" readonly />
+              <span class="stat-mod" id="mod-con">+0</span>
+              <button type="button" class="btn-stat-plus" data-stat="con" style="display:none;" aria-label="Asignar punto a Constitución">+</button>
+            </div>
+            <button type="button" class="roll-btn" data-stat="con" data-label="Constitución">🎲 D20</button>
+          </div>
+
+          <div class="stat-block" data-stat="int">
+            <div class="stat-names">
+              <span class="stat-abbr">INT</span>
+              <span class="stat-full">Inteligencia</span>
+            </div>
+            <div class="stat-controls">
+              <input type="number" class="stat-value" id="stat-int" value="10" min="1" max="20" readonly />
+              <span class="stat-mod" id="mod-int">+0</span>
+              <button type="button" class="btn-stat-plus" data-stat="int" style="display:none;" aria-label="Asignar punto a Inteligencia">+</button>
+            </div>
+            <button type="button" class="roll-btn" data-stat="int" data-label="Inteligencia">🎲 D20</button>
+          </div>
+
+          <div class="stat-block" data-stat="wis">
+            <div class="stat-names">
+              <span class="stat-abbr">SAB</span>
+              <span class="stat-full">Sabiduría</span>
+            </div>
+            <div class="stat-controls">
+              <input type="number" class="stat-value" id="stat-wis" value="10" min="1" max="20" readonly />
+              <span class="stat-mod" id="mod-wis">+0</span>
+              <button type="button" class="btn-stat-plus" data-stat="wis" style="display:none;" aria-label="Asignar punto a Sabiduría">+</button>
+            </div>
+            <button type="button" class="roll-btn" data-stat="wis" data-label="Sabiduría">🎲 D20</button>
+          </div>
+
+          <div class="stat-block" data-stat="cha">
+            <div class="stat-names">
+              <span class="stat-abbr">CAR</span>
+              <span class="stat-full">Carisma</span>
+            </div>
+            <div class="stat-controls">
+              <input type="number" class="stat-value" id="stat-cha" value="10" min="1" max="20" readonly />
+              <span class="stat-mod" id="mod-cha">+0</span>
+              <button type="button" class="btn-stat-plus" data-stat="cha" style="display:none;" aria-label="Asignar punto a Carisma">+</button>
+            </div>
+            <button type="button" class="roll-btn" data-stat="cha" data-label="Carisma">🎲 D20</button>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Habilidades D&D 5e — generadas por app.js -->
+      <div class="skills-section">
+        <div class="skills-header-row">
+          <h3 class="section-label">⚔ Habilidades</h3>
+          <button type="button" class="skills-toggle-btn" id="skills-toggle"
+            aria-expanded="true" aria-controls="skills-body">▼</button>
+        </div>
+        <div class="skills-body" id="skills-body"></div>
+      </div>
+
+      <!-- Inventario Dinámico -->
+      <div class="inventory-section">
+        <div class="inventory-header-row">
+          <h3 class="section-label">🎒 Inventario</h3>
+          <span class="inventory-count" id="inventory-count">0</span>
+        </div>
+        <!-- Slots de equipamiento activo -->
+        <div class="equipment-slots" id="equipment-slots">
+          <div class="equip-slot" data-slot="arma">
+            <span class="equip-slot-label">⚔ Arma</span>
+            <div class="equip-slot-content" id="equip-content-arma"><span class="equip-slot-empty">vacío</span></div>
+          </div>
+          <div class="equip-slot" data-slot="armadura">
+            <span class="equip-slot-label">🛡 Armadura</span>
+            <div class="equip-slot-content" id="equip-content-armadura"><span class="equip-slot-empty">vacío</span></div>
+          </div>
+          <div class="equip-slot" data-slot="accesorio">
+            <span class="equip-slot-label">💍 Accesorio</span>
+            <div class="equip-slot-content" id="equip-content-accesorio"><span class="equip-slot-empty">vacío</span></div>
+          </div>
+        </div>
+
+        <div class="inventory-list" id="inventory-list">
+          <div class="inventory-empty" id="inventory-empty">La mochila está vacía</div>
+        </div>
+        <!-- Textarea oculta — sincronizada para contexto de la IA -->
+        <textarea id="inventory" style="display:none" aria-hidden="true"></textarea>
+      </div>
+
+      <!-- Diario de Misiones -->
+      <div class="quest-section">
+        <div class="quest-header-row">
+          <h3 class="section-label">📜 Diario de Misiones</h3>
+          <button type="button" class="quest-toggle-btn" id="quest-toggle"
+            aria-expanded="true" aria-controls="quest-body">▼</button>
+        </div>
+        <div class="quest-body" id="quest-body">
+          <div class="quest-category-label">⚔ Activas</div>
+          <div class="quest-list" id="quest-active-list"></div>
+          <div class="quest-category-label quest-done-label">✓ Completadas</div>
+          <div class="quest-list" id="quest-completed-list"></div>
+          <div class="quest-empty" id="quest-empty">Sin misiones registradas</div>
+        </div>
+      </div>
+
+      <!-- Bitácora del Destino — Historial de Tiradas -->
+      <div class="rolls-section">
+        <div class="rolls-header-row">
+          <h3 class="section-label">🎲 Bitácora del Destino</h3>
+          <button type="button" class="rolls-toggle-btn" id="rolls-toggle"
+            aria-expanded="false" aria-controls="rolls-body">▶</button>
+        </div>
+        <div class="rolls-body collapsed" id="rolls-body">
+          <div class="rolls-empty" id="rolls-empty">Sin tiradas en esta sesión.</div>
+        </div>
+      </div>
+
+      <!-- Partida — Diario, Exportar/Importar -->
+      <div class="diary-section">
+        <button type="button" class="btn-diary" id="btn-diary">📜 Diario de Campaña</button>
+      </div>
+
+      <div class="save-section">
+        <button type="button" class="btn-save-action" id="btn-export">📤 Exportar Partida</button>
+        <button type="button" class="btn-save-action" id="btn-import">📥 Importar Partida</button>
+        <input type="file" id="import-file" accept=".json" style="display:none" />
+      </div>
+
+      <!-- Zona de Peligro — Resetear y Borrar -->
+      <div class="wipe-section">
+        <button type="button" class="btn-reset-prog" id="btn-reset-prog"
+          title="Resetear nivel, XP y atributos a los valores iniciales de la clase">↺ Resetear Progresión</button>
+        <button type="button" class="btn-wipe" id="btn-wipe">⚠ Reiniciar Personaje y Progreso</button>
+      </div>
+
+    </aside>
+
+
+    <!-- ═══════════════════════════════════════════════
+         COLUMNA CENTRAL — El Chat de la Historia
+    ════════════════════════════════════════════════ -->
+    <section class="panel panel-chat">
+
+      <div class="panel-header">
+        <span class="panel-icon">📜</span>
+        <h2>La Historia</h2>
+        <div class="dm-status">
+          <span class="status-dot" id="status-dot"></span>
+          <span id="status-text">Dungeon Master en espera</span>
+        </div>
+      </div>
+
+      <div class="chat-messages" id="chat-messages" aria-live="polite" aria-label="Narración de la historia">
+        <div class="message dm-message">
+          <div class="msg-avatar">DM</div>
+          <div class="msg-body">
+            <p><em>Las antorchas parpadean en las paredes de piedra húmeda. El silencio pesa como una armadura de hierro...</em></p>
+            <p>Bienvenido a las <strong>Crónicas del Abismo</strong>.</p>
+            <p>Para comenzar tu aventura: completa tu hoja de personaje a la izquierda, añade las instrucciones de tu mundo en el panel derecho, e introduce tu API Key. Puedes usar <strong>Groq</strong> (gratis en console.groq.com, recomendado) u OpenRouter. Cuando estés listo, describe tu primera acción.</p>
+            <p><em>El destino aguarda, aventurero.</em></p>
+          </div>
+        </div>
+      </div>
+
+      <div class="chat-input-area">
+        <div class="dice-flash" id="dice-flash"></div>
+
+        <!-- Bandeja de dados manual -->
+        <div class="dice-tray" id="dice-tray" aria-hidden="true">
+          <div class="dice-tray-section">
+            <span class="dice-tray-label">Comprobaciones</span>
+            <div class="dice-tray-attrs">
+              <button type="button" class="dice-attr-btn" data-stat="str" data-label="Fuerza">FUE<small class="tray-mod" id="tray-mod-str">+0</small></button>
+              <button type="button" class="dice-attr-btn" data-stat="dex" data-label="Destreza">DES<small class="tray-mod" id="tray-mod-dex">+0</small></button>
+              <button type="button" class="dice-attr-btn" data-stat="con" data-label="Constitución">CON<small class="tray-mod" id="tray-mod-con">+0</small></button>
+              <button type="button" class="dice-attr-btn" data-stat="int" data-label="Inteligencia">INT<small class="tray-mod" id="tray-mod-int">+0</small></button>
+              <button type="button" class="dice-attr-btn" data-stat="wis" data-label="Sabiduría">SAB<small class="tray-mod" id="tray-mod-wis">+0</small></button>
+              <button type="button" class="dice-attr-btn" data-stat="cha" data-label="Carisma">CAR<small class="tray-mod" id="tray-mod-cha">+0</small></button>
+            </div>
+          </div>
+          <div class="dice-tray-section">
+            <span class="dice-tray-label">Dados libres</span>
+            <div class="dice-tray-dice">
+              <button type="button" class="dice-free-btn" data-sides="4">D4</button>
+              <button type="button" class="dice-free-btn" data-sides="6">D6</button>
+              <button type="button" class="dice-free-btn" data-sides="8">D8</button>
+              <button type="button" class="dice-free-btn" data-sides="10">D10</button>
+              <button type="button" class="dice-free-btn" data-sides="12">D12</button>
+              <button type="button" class="dice-free-btn" data-sides="20">D20</button>
+              <button type="button" class="dice-free-btn" data-sides="100">D%</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="input-row">
+          <textarea
+            id="player-input"
+            placeholder="¿Qué haces? Describe tu acción con detalle..."
+            rows="2"
+          ></textarea>
+          <button type="button" class="dice-tray-btn" id="dice-tray-btn"
+            title="Panel de dados manuales" aria-label="Abrir panel de dados">⚄</button>
+          <button type="button" class="dice-roll-btn" id="dice-roll-btn" disabled
+            title="Esperando petición de tirada..." aria-label="Tirar D20">🎲</button>
+          <button type="button" class="send-btn" id="send-btn" title="Enviar (Ctrl + Enter)" aria-label="Enviar mensaje">
+            <span aria-hidden="true">➤</span>
+          </button>
+        </div>
+        <div class="input-hint">
+          <kbd>Ctrl+Enter</kbd> para enviar &nbsp;·&nbsp; <kbd>Enter</kbd> para nueva línea
+        </div>
+      </div>
+
+    </section>
+
+
+    <!-- ═══════════════════════════════════════════════
+         COLUMNA DERECHA — Panel de Contexto y API
+    ════════════════════════════════════════════════ -->
+    <aside class="panel panel-context">
+
+      <div class="panel-header">
+        <span class="panel-icon">⚙</span>
+        <h2>Contexto y Config.</h2>
+      </div>
+
+      <!-- API Key -->
+      <div class="context-block api-block">
+        <div class="context-block-title">
+          <h3>🔑 API Key (Groq o OpenRouter)</h3>
+          <button type="button" class="icon-btn" id="toggle-api-key" title="Mostrar / ocultar" aria-label="Mostrar u ocultar API key">👁</button>
+        </div>
+        <input
+          type="password"
+          id="api-key"
+          placeholder="gsk_... (Groq) o sk-or-v1-... (OpenRouter)"
+          autocomplete="off"
+          spellcheck="false"
+        />
+        <div class="api-indicator" id="api-indicator">
+          <span class="dot dot-off" id="api-dot"></span>
+          <span id="api-label">No configurada</span>
+        </div>
+        <button type="button" class="ctx-btn" id="save-api-btn">Guardar API Key</button>
+      </div>
+
+      <!-- Instrucciones del Mundo -->
+      <div class="context-block">
+        <div class="context-block-title">
+          <h3>🌍 Instrucciones del Mundo</h3>
+        </div>
+        <p class="ctx-desc">Define el lore, tono y reglas del juego. Se envía al inicio de cada mensaje.</p>
+        <textarea
+          id="world-lore"
+          rows="8"
+          placeholder="Eres un Dungeon Master narrando una campaña de fantasía oscura medieval. El mundo se llama Valdris, un reino en ruinas donde los dioses han abandonado a los mortales. Habla en español con tono dramático y cinematográfico. Describe los entornos con detalle sensorial. Cuando el jugador tire dados, incorpora el resultado en la narrativa..."
+        ></textarea>
+      </div>
+
+      <!-- Resumen de Historia -->
+      <div class="context-block">
+        <div class="context-block-title">
+          <h3>📖 Resumen de Historia</h3>
+        </div>
+        <p class="ctx-desc">Memoria de la aventura. Ayuda a la IA a mantener coherencia entre sesiones.</p>
+        <textarea
+          id="story-summary"
+          rows="6"
+          placeholder="El aventurero comenzó en la taberna del Jabalí Cojo en el pueblo de Roca Gris. Aceptó investigar las desapariciones en el bosque de Grimholde a cambio de 50 monedas de oro..."
+        ></textarea>
+        <button type="button" class="ctx-btn secondary" id="update-summary-btn">💾 Guardar Resumen</button>
+      </div>
+
+      <!-- Estadísticas de Sesión -->
+      <div class="context-block session-block">
+        <div class="context-block-title">
+          <h3>📊 Sesión Actual</h3>
+        </div>
+        <div class="session-grid">
+          <div class="session-stat">
+            <span class="s-label">Mensajes</span>
+            <span class="s-val" id="msg-count">1</span>
+          </div>
+          <div class="session-stat">
+            <span class="s-label">Tokens est.</span>
+            <span class="s-val" id="token-count">~80</span>
+          </div>
+        </div>
+        <button type="button" class="ctx-btn danger" id="clear-chat-btn">🗑 Nueva Partida</button>
+      </div>
+
+    </aside>
+  </main>
+
+  <!-- Toast de subida de nivel (posición fija, controlado por JS) -->
+  <div class="levelup-toast" id="levelup-toast" aria-live="assertive" aria-atomic="true"></div>
+
+  <!-- Battle Panel — contenedor flex para tarjetas de combate/conversación -->
+  <div id="battle-panel" class="battle-panel" aria-hidden="true">
+
+    <!-- Tarjeta Jugador (izquierda) -->
+    <div id="player-card" class="enemy-card player-card" aria-hidden="true" aria-label="Jugador">
+      <div class="enemy-card-header">TÚ</div>
+      <div class="avatar-frame player-avatar-frame">
+        <img id="player-avatar-img" class="avatar-img" src="img/protagonistas/guerrero.png" alt="Avatar del jugador" />
+        <span class="avatar-label">Tú</span>
+        <div class="hp-container" id="player-hp">
+          <div class="hp-bar" id="player-hp-bar" style="width:100%"></div>
+          <div class="hp-text" id="player-hp-text">10 / 10</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Botón de seguridad: cierra el combate manualmente si la IA olvida el tag -->
+    <button type="button" class="battle-panel-close" id="battle-panel-close"
+      title="Cerrar combate (seguridad)" aria-label="Forzar cierre del panel de combate">✕</button>
+
+    <!-- Tarjeta Enemigo / NPC (derecha) -->
+    <div id="enemy-card" class="enemy-card enemy-card-right" aria-hidden="true" aria-label="Enemigo en combate">
+      <div class="enemy-card-header">⚔</div>
+      <div class="avatar-frame enemy-avatar-frame">
+        <img id="enemy-avatar-img" class="avatar-img" src="img/enemigos/goblin-1.png" alt="Avatar del enemigo" />
+        <span class="avatar-label" id="enemy-card-name">—</span>
+        <div class="hp-container" id="enemy-hp">
+          <div class="hp-bar hp-bar-enemy" id="enemy-hp-bar" style="width:100%"></div>
+          <div class="hp-text" id="enemy-hp-text">— / —</div>
+        </div>
+      </div>
+      <div class="death-overlay" id="death-overlay" aria-hidden="true">
+        <span class="death-x">✕</span>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Game Over Overlay -->
+  <div id="gameover-overlay" class="gameover-overlay" aria-hidden="true" role="dialog" aria-modal="true">
+    <div class="gameover-card">
+      <span class="gameover-skull" aria-hidden="true">💀</span>
+      <h2 class="gameover-title">Has caído</h2>
+      <p class="gameover-desc">La oscuridad te envuelve... ¿Vuelves desde el último punto de control o empiezas de nuevo?</p>
+      <div class="gameover-actions">
+        <button id="btn-load-checkpoint" class="gameover-btn gameover-btn-primary" type="button">⏪ Último punto de control</button>
+        <button id="btn-restart-death"   class="gameover-btn gameover-btn-secondary" type="button">🔄 Nueva partida</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Navegación inferior móvil (oculta en escritorio via CSS) -->
+  <nav class="mobile-nav" id="mobile-nav" aria-label="Navegación de paneles">
+    <button type="button" class="mnav-btn" data-target="panel-character" aria-label="Hoja de Personaje">
+      <span class="mnav-icon">🧙</span>
+      <span class="mnav-label">Personaje</span>
+    </button>
+    <button type="button" class="mnav-btn mnav-active" data-target="panel-chat" aria-label="La Historia">
+      <span class="mnav-icon">📜</span>
+      <span class="mnav-label">Historia</span>
+    </button>
+    <button type="button" class="mnav-btn" data-target="panel-context" aria-label="Configuración">
+      <span class="mnav-icon">⚙</span>
+      <span class="mnav-label">Config.</span>
+    </button>
+  </nav>
+
+  <!-- Overlay Cinemático de Tirada D20 (solicitada por la IA) -->
+  <div class="roll-cinematic-overlay" id="roll-cinematic-overlay" aria-hidden="true">
+    <!-- Banner de alerta pulsante en rojo -->
+    <div class="roll-alert-banner">
+      <span class="roll-alert-sym">⚠</span>
+      <span class="roll-alert-text" id="roll-cinematic-title">¡COMPROBACIÓN DE ATRIBUTO!</span>
+      <span class="roll-alert-sym">⚠</span>
+    </div>
+    <!-- Tarjeta central con el dado PNG -->
+    <div class="roll-cinematic-card">
+      <div class="roll-d20-perspective">
+        <button type="button" class="roll-d20-giant" id="roll-d20-giant-btn"
+          aria-label="Lanzar dado D20">
+          <img src="d20.png" class="roll-d20-img" alt="" aria-hidden="true" />
+          <span class="roll-d20-result" id="roll-d20-number-display">?</span>
+        </button>
+      </div>
+      <div class="roll-tap-hint" id="roll-cinematic-hint">Toca el dado para lanzar</div>
+      <div class="roll-d20-modifier" id="roll-cinematic-modifier"></div>
+    </div>
+  </div>
+
+  <!-- Overlay de Dado -->
+  <div class="dice-overlay" id="dice-overlay" role="dialog" aria-modal="true" aria-label="Resultado de tirada de dado">
+    <div class="dice-card" id="dice-card">
+      <div class="dice-symbol" aria-hidden="true">🎲</div>
+      <div class="dice-number" id="dice-number" aria-live="assertive">—</div>
+      <div class="dice-detail" id="dice-detail"></div>
+      <div class="dice-close-hint">Toca o pulsa Esc para cerrar</div>
+    </div>
+  </div>
+
+  <!-- Modal Diario de Campaña -->
+  <div class="diary-modal-overlay" id="diary-modal" role="dialog" aria-modal="true" aria-label="Diario de Campaña">
+    <div class="diary-modal-card">
+      <div class="diary-modal-header">
+        <span class="char-modal-ornament">✦</span>
+        <h2>Diario de Campaña</h2>
+        <button type="button" class="diary-close-btn" id="diary-close-btn" aria-label="Cerrar diario">✕</button>
+      </div>
+      <div class="diary-body" id="diary-body">
+        <!-- Contenido inyectado por JS -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal de detalle de misión -->
+  <div class="quest-modal-overlay" id="quest-modal" role="dialog" aria-modal="true" aria-hidden="true" aria-label="Detalle de misión">
+    <div class="quest-modal-card">
+      <div class="quest-modal-header">
+        <div class="quest-modal-header-top">
+          <span class="quest-modal-icon" id="quest-modal-icon">📜</span>
+          <span class="quest-modal-status" id="quest-modal-status">Activa</span>
+        </div>
+        <h2 class="quest-modal-title" id="quest-modal-title"></h2>
+      </div>
+      <div class="quest-modal-body">
+        <p class="quest-modal-desc" id="quest-modal-desc"></p>
+      </div>
+      <div class="quest-modal-actions">
+        <button type="button" class="quest-modal-complete-btn" id="quest-modal-complete-btn">✓ Marcar como completada</button>
+        <button type="button" class="quest-modal-close-btn" id="quest-modal-close-btn">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal de Creación de Personaje -->
+  <div class="char-modal-overlay" id="char-modal" role="dialog" aria-modal="true" aria-label="Crear Personaje">
+    <div class="char-modal-card">
+      <div class="char-modal-header">
+        <span class="char-modal-ornament">⚔</span>
+        <h2>Crónicas del Abismo</h2>
+        <span class="char-modal-ornament">⚔</span>
+      </div>
+      <p class="char-modal-subtitle">Antes de comenzar tu aventura, define tu leyenda...</p>
+
+      <div class="char-modal-field">
+        <label for="modal-name">Nombre del Personaje</label>
+        <input type="text" id="modal-name" placeholder="¿Cómo te llaman los bardos?" maxlength="40" autocomplete="off" spellcheck="false" />
+      </div>
+
+      <div class="char-modal-field">
+        <label for="modal-class">Clase</label>
+        <select id="modal-class">
+          <option value="">— Elige tu destino —</option>
+          <option value="Guerrero">⚔ Guerrero</option>
+          <option value="Mago">🔮 Mago</option>
+          <option value="Pícaro">🗡 Pícaro</option>
+          <option value="Clérigo">✝ Clérigo</option>
+          <option value="Explorador">🏹 Explorador</option>
+          <option value="Paladín">🛡 Paladín</option>
+          <option value="Bárbaro">🪓 Bárbaro</option>
+          <option value="Bardo">🎵 Bardo</option>
+          <option value="Druida">🌿 Druida</option>
+          <option value="Hechicero">✨ Hechicero</option>
+          <option value="Monje">👊 Monje</option>
+          <option value="Brujo">👁 Brujo</option>
+        </select>
+      </div>
+
+      <button type="button" class="char-modal-btn" id="modal-start-btn">⚔ Comenzar Aventura</button>
+    </div>
+  </div>
+
+  <script src="stats-clases.js"></script>
+  <script src="bestiario.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

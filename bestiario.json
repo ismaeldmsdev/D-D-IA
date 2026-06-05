@@ -1,0 +1,37 @@
+{
+  "enemigos": {
+    "arana":        { "nombre": "Araña Gigante",    "hpMax": 26,  "ca": 14, "dano": "1d8+2",  "img": "img/enemigos/arana.png" },
+    "arpia":        { "nombre": "Arpía",            "hpMax": 38,  "ca": 13, "dano": "1d6+3",  "img": "img/enemigos/arpia.png" },
+    "caballero":    { "nombre": "Caballero Negro",  "hpMax": 52,  "ca": 18, "dano": "1d10+4", "img": "img/enemigos/caballero.png" },
+    "demonio":      { "nombre": "Demonio Menor",    "hpMax": 60,  "ca": 15, "dano": "2d6+3",  "img": "img/enemigos/demonio.png" },
+    "dragon":       { "nombre": "Dragón Joven",     "hpMax": 150, "ca": 18, "dano": "2d10+8", "img": "img/enemigos/dragon.png" },
+    "gargola":      { "nombre": "Gárgola",          "hpMax": 52,  "ca": 15, "dano": "1d6+4",  "img": "img/enemigos/gargola.png" },
+    "ghost":        { "nombre": "Fantasma",         "hpMax": 45,  "ca": 11, "dano": "2d6",    "img": "img/enemigos/ghost.png" },
+    "goblin-1":     { "nombre": "Goblin",           "hpMax": 15,  "ca": 12, "dano": "1d6+2",  "img": "img/enemigos/goblin-1.png" },
+    "goblin-2":     { "nombre": "Goblin Veterano",  "hpMax": 25,  "ca": 13, "dano": "1d8+2",  "img": "img/enemigos/goblin-2.png" },
+    "golem":        { "nombre": "Golem de Piedra",  "hpMax": 100, "ca": 17, "dano": "2d10+5", "img": "img/enemigos/golem.png" },
+    "gorgona":      { "nombre": "Gorgona",          "hpMax": 85,  "ca": 16, "dano": "2d8+4",  "img": "img/enemigos/gorgona.png" },
+    "hombre-lobo":  { "nombre": "Hombre Lobo",      "hpMax": 58,  "ca": 12, "dano": "2d6+3",  "img": "img/enemigos/hombre-lobo.png" },
+    "mimo":         { "nombre": "Mímico",           "hpMax": 45,  "ca": 12, "dano": "1d8+3",  "img": "img/enemigos/mimo.png" },
+    "minotauro":    { "nombre": "Minotauro",        "hpMax": 76,  "ca": 14, "dano": "2d12+4", "img": "img/enemigos/minotauro.png" },
+    "nigromante":   { "nombre": "Nigromante",       "hpMax": 40,  "ca": 13, "dano": "1d10+2", "img": "img/enemigos/nigromante.png" },
+    "orc":          { "nombre": "Orco",             "hpMax": 30,  "ca": 13, "dano": "1d12+3", "img": "img/enemigos/orc.png" },
+    "skeletor":     { "nombre": "Esqueleto",        "hpMax": 18,  "ca": 13, "dano": "1d6+1",  "img": "img/enemigos/skeletor.png" },
+    "troll":        { "nombre": "Troll",            "hpMax": 65,  "ca": 15, "dano": "2d6+5",  "img": "img/enemigos/troll.png" },
+    "vampire":      { "nombre": "Vampiro",          "hpMax": 80,  "ca": 16, "dano": "1d10+4", "img": "img/enemigos/vampire.png" },
+    "zombie":       { "nombre": "Zombi",            "hpMax": 22,  "ca": 8,  "dano": "1d6+1",  "img": "img/enemigos/zombie.png" }
+  },
+  "npcs": {
+    "alquimista":          { "nombre": "Alquimista",             "img": "img/npcs/alquimista.png" },
+    "asesino":             { "nombre": "Asesino",                "img": "img/npcs/asesino.png" },
+    "buffon":              { "nombre": "Bufón",                  "img": "img/npcs/buffon.png" },
+    "caballero-veterano":  { "nombre": "Caballero Veterano",     "img": "img/npcs/caballero-veterano.png" },
+    "guardia-puerta":      { "nombre": "Guardia de la Puerta",   "img": "img/npcs/guardia-puerta.png" },
+    "herrero":             { "nombre": "Herrero",                "img": "img/npcs/herrero.png" },
+    "mercader-oscuro":     { "nombre": "Mercader Oscuro",        "img": "img/npcs/mercader-oscuro.png" },
+    "nina-mistica":        { "nombre": "Niña Mística",           "img": "img/npcs/niña-mistica.png" },
+    "paladin-espectral":   { "nombre": "Paladín Espectral",      "img": "img/npcs/paladin-espectral.png" },
+    "rey":                 { "nombre": "Rey",                    "img": "img/npcs/rey.png" },
+    "viajero-tierras-lejanas": { "nombre": "Viajero de Tierras Lejanas", "img": "img/npcs/viajero-tierras-lejanas.png" }
+  }
+}
