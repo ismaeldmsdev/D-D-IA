@@ -22,6 +22,7 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
+  <script>if(localStorage.getItem('rpg_theme')==='parchment')document.body.classList.add('theme-parchment');</script>
 
   <header class="game-header">
     <div class="header-ornament">⚔</div>
@@ -98,6 +99,7 @@
         <div class="xp-info-row">
           <span class="xp-percent" id="xp-percent">0%</span>
           <span class="prof-bonus-display">Competencia: <strong id="prof-bonus-val">+2</strong></span>
+          <button type="button" id="btn-reset-prog" class="btn-reset-prog" title="Resetear nivel, XP y atributos">↺ Reset</button>
         </div>
       </div>
 
@@ -264,21 +266,20 @@
         </div>
       </div>
 
-      <!-- Partida — Diario, Exportar/Importar -->
+      <!-- Diario de Campaña -->
       <div class="diary-section">
         <button type="button" class="btn-diary" id="btn-diary">📜 Diario de Campaña</button>
       </div>
 
+      <!-- Exportar / Importar Partida -->
       <div class="save-section">
         <button type="button" class="btn-save-action" id="btn-export">📤 Exportar Partida</button>
         <button type="button" class="btn-save-action" id="btn-import">📥 Importar Partida</button>
         <input type="file" id="import-file" accept=".json" style="display:none" />
       </div>
 
-      <!-- Zona de Peligro — Resetear y Borrar -->
+      <!-- Reinicio Total -->
       <div class="wipe-section">
-        <button type="button" class="btn-reset-prog" id="btn-reset-prog"
-          title="Resetear nivel, XP y atributos a los valores iniciales de la clase">↺ Resetear Progresión</button>
         <button type="button" class="btn-wipe" id="btn-wipe">⚠ Reiniciar Personaje y Progreso</button>
       </div>
 
@@ -313,42 +314,12 @@
 
       <div class="chat-input-area">
         <div class="dice-flash" id="dice-flash"></div>
-
-        <!-- Bandeja de dados manual -->
-        <div class="dice-tray" id="dice-tray" aria-hidden="true">
-          <div class="dice-tray-section">
-            <span class="dice-tray-label">Comprobaciones</span>
-            <div class="dice-tray-attrs">
-              <button type="button" class="dice-attr-btn" data-stat="str" data-label="Fuerza">FUE<small class="tray-mod" id="tray-mod-str">+0</small></button>
-              <button type="button" class="dice-attr-btn" data-stat="dex" data-label="Destreza">DES<small class="tray-mod" id="tray-mod-dex">+0</small></button>
-              <button type="button" class="dice-attr-btn" data-stat="con" data-label="Constitución">CON<small class="tray-mod" id="tray-mod-con">+0</small></button>
-              <button type="button" class="dice-attr-btn" data-stat="int" data-label="Inteligencia">INT<small class="tray-mod" id="tray-mod-int">+0</small></button>
-              <button type="button" class="dice-attr-btn" data-stat="wis" data-label="Sabiduría">SAB<small class="tray-mod" id="tray-mod-wis">+0</small></button>
-              <button type="button" class="dice-attr-btn" data-stat="cha" data-label="Carisma">CAR<small class="tray-mod" id="tray-mod-cha">+0</small></button>
-            </div>
-          </div>
-          <div class="dice-tray-section">
-            <span class="dice-tray-label">Dados libres</span>
-            <div class="dice-tray-dice">
-              <button type="button" class="dice-free-btn" data-sides="4">D4</button>
-              <button type="button" class="dice-free-btn" data-sides="6">D6</button>
-              <button type="button" class="dice-free-btn" data-sides="8">D8</button>
-              <button type="button" class="dice-free-btn" data-sides="10">D10</button>
-              <button type="button" class="dice-free-btn" data-sides="12">D12</button>
-              <button type="button" class="dice-free-btn" data-sides="20">D20</button>
-              <button type="button" class="dice-free-btn" data-sides="100">D%</button>
-            </div>
-          </div>
-        </div>
-
         <div class="input-row">
           <textarea
             id="player-input"
             placeholder="¿Qué haces? Describe tu acción con detalle..."
             rows="2"
           ></textarea>
-          <button type="button" class="dice-tray-btn" id="dice-tray-btn"
-            title="Panel de dados manuales" aria-label="Abrir panel de dados">⚄</button>
           <button type="button" class="dice-roll-btn" id="dice-roll-btn" disabled
             title="Esperando petición de tirada..." aria-label="Tirar D20">🎲</button>
           <button type="button" class="send-btn" id="send-btn" title="Enviar (Ctrl + Enter)" aria-label="Enviar mensaje">
@@ -464,19 +435,24 @@
     <button type="button" class="battle-panel-close" id="battle-panel-close"
       title="Cerrar combate (seguridad)" aria-label="Forzar cierre del panel de combate">✕</button>
 
-    <!-- Tarjeta Enemigo / NPC (derecha) -->
-    <div id="enemy-card" class="enemy-card enemy-card-right" aria-hidden="true" aria-label="Enemigo en combate">
-      <div class="enemy-card-header">⚔</div>
-      <div class="avatar-frame enemy-avatar-frame">
-        <img id="enemy-avatar-img" class="avatar-img" src="img/enemigos/goblin-1.png" alt="Avatar del enemigo" />
-        <span class="avatar-label" id="enemy-card-name">—</span>
-        <div class="hp-container" id="enemy-hp">
-          <div class="hp-bar hp-bar-enemy" id="enemy-hp-bar" style="width:100%"></div>
-          <div class="hp-text" id="enemy-hp-text">— / —</div>
+    <!-- Tarjeta Enemigo / NPC (derecha) — wrapper para efecto de apilamiento -->
+    <div id="enemy-stack-wrapper" class="enemy-stack-wrapper">
+      <div class="enemy-stack-ghost ghost-2" aria-hidden="true"></div>
+      <div class="enemy-stack-ghost ghost-1" aria-hidden="true"></div>
+      <span class="enemy-count-badge" id="enemy-count-badge" aria-hidden="true"></span>
+      <div id="enemy-card" class="enemy-card enemy-card-right" aria-hidden="true" aria-label="Enemigo en combate">
+        <div class="enemy-card-header">⚔</div>
+        <div class="avatar-frame enemy-avatar-frame">
+          <img id="enemy-avatar-img" class="avatar-img" src="img/enemigos/goblin-1.png" alt="Avatar del enemigo" />
+          <span class="avatar-label" id="enemy-card-name">—</span>
+          <div class="hp-container" id="enemy-hp">
+            <div class="hp-bar hp-bar-enemy" id="enemy-hp-bar" style="width:100%"></div>
+            <div class="hp-text" id="enemy-hp-text">— / —</div>
+          </div>
         </div>
-      </div>
-      <div class="death-overlay" id="death-overlay" aria-hidden="true">
-        <span class="death-x">✕</span>
+        <div class="death-overlay" id="death-overlay" aria-hidden="true">
+          <span class="death-x">✕</span>
+        </div>
       </div>
     </div>
 
@@ -520,8 +496,12 @@
       <span class="roll-alert-sym">⚠</span>
     </div>
     <!-- Tarjeta central con el dado PNG -->
-    <div class="roll-cinematic-card">
-      <div class="roll-d20-perspective">
+    <div class="roll-cinematic-card" id="roll-cinematic-card">
+      <!-- Destellos de fondo durante el giro -->
+      <div class="roll-bg-runes" id="roll-bg-runes" aria-hidden="true"></div>
+      <div class="roll-d20-perspective" id="roll-d20-perspective">
+        <!-- Onda expansiva de impacto -->
+        <div class="roll-impact-ring" id="roll-impact-ring" aria-hidden="true"></div>
         <button type="button" class="roll-d20-giant" id="roll-d20-giant-btn"
           aria-label="Lanzar dado D20">
           <img src="d20.png" class="roll-d20-img" alt="" aria-hidden="true" />
@@ -531,6 +511,8 @@
       <div class="roll-tap-hint" id="roll-cinematic-hint">Toca el dado para lanzar</div>
       <div class="roll-d20-modifier" id="roll-cinematic-modifier"></div>
     </div>
+    <!-- Flash de impacto (sobre todo el overlay) -->
+    <div class="roll-screen-flash" id="roll-screen-flash" aria-hidden="true"></div>
   </div>
 
   <!-- Overlay de Dado -->
@@ -553,26 +535,6 @@
       </div>
       <div class="diary-body" id="diary-body">
         <!-- Contenido inyectado por JS -->
-      </div>
-    </div>
-  </div>
-
-  <!-- Modal de detalle de misión -->
-  <div class="quest-modal-overlay" id="quest-modal" role="dialog" aria-modal="true" aria-hidden="true" aria-label="Detalle de misión">
-    <div class="quest-modal-card">
-      <div class="quest-modal-header">
-        <div class="quest-modal-header-top">
-          <span class="quest-modal-icon" id="quest-modal-icon">📜</span>
-          <span class="quest-modal-status" id="quest-modal-status">Activa</span>
-        </div>
-        <h2 class="quest-modal-title" id="quest-modal-title"></h2>
-      </div>
-      <div class="quest-modal-body">
-        <p class="quest-modal-desc" id="quest-modal-desc"></p>
-      </div>
-      <div class="quest-modal-actions">
-        <button type="button" class="quest-modal-complete-btn" id="quest-modal-complete-btn">✓ Marcar como completada</button>
-        <button type="button" class="quest-modal-close-btn" id="quest-modal-close-btn">Cerrar</button>
       </div>
     </div>
   </div>
@@ -615,6 +577,10 @@
     </div>
   </div>
 
+  <script src="src/config.js"></script>
+  <script src="src/utils.js"></script>
+  <script src="src/audio.js"></script>
+  <script src="src/prompt.js"></script>
   <script src="stats-clases.js"></script>
   <script src="bestiario.js"></script>
   <script src="app.js"></script>

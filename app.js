@@ -4,12 +4,31 @@
    D20 Interactivo · Inventario dinámico · Diario de Misiones
    Streaming real · Persistencia total · Modal de inicio
    ════════════════════════════════════════════════════ */
-'use strict';
 
-// Aplicar tema guardado antes de DOMContentLoaded para evitar parpadeo (FOUC)
-if (localStorage.getItem('rpg_theme') === 'parchment') {
-  document.body.classList.add('theme-parchment');
-}
+/* Módulos cargados como <script> normales en index.html — acceso via window._RPG */
+var _G = window._RPG || {};
+var MAX_TOKENS    = _G.MAX_TOKENS;
+var HISTORY_LIMIT = _G.HISTORY_LIMIT;
+var SKILLS        = _G.SKILLS;
+var XP_TABLE      = _G.XP_TABLE;
+var ATTR_ABBR     = _G.ATTR_ABBR;
+var ATTR_CLASS    = _G.ATTR_CLASS;
+var ASI_LEVELS    = _G.ASI_LEVELS;
+var ATTR_MAP      = _G.ATTR_MAP;
+var STAT_TO_ES    = _G.STAT_TO_ES;
+var resolveAttr   = _G.resolveAttr.bind(_G);
+var isConsumable  = _G.isConsumable.bind(_G);
+var $             = _G.$;
+var $$            = _G.$$;
+var calcMod       = _G.calcMod;
+var fmtMod        = _G.fmtMod;
+var vibe          = _G.vibe;
+var debounce      = _G.debounce;
+var lsSave        = _G.lsSave;
+var escHtml       = _G.escHtml;
+var mdToHtml      = _G.mdToHtml;
+var sfx           = _G.sfx;
+var buildDmCore   = _G.buildDmCore;
 
 // ── Bloqueo de zoom táctil (iOS Safari ignora user-scalable=no) ──
 document.addEventListener('gesturestart',  e => e.preventDefault());
@@ -27,75 +46,6 @@ document.addEventListener('touchend', e => {
 
 
 document.addEventListener('DOMContentLoaded', () => {
-
-  // ─────────────────────────────────────────────────────
-  // CONFIGURACIÓN
-  // ─────────────────────────────────────────────────────
-  const MAX_TOKENS    = 1000;  // Máximo por mensaje — evita cortes narrativos
-  const HISTORY_LIMIT = 8; // Reducido: el Diario cubre el pasado lejano
-
-  // ─────────────────────────────────────────────────────
-  // HABILIDADES D&D 5e
-  // ─────────────────────────────────────────────────────
-  const SKILLS = [
-    { id: 'athletics',     label: 'Atletismo',      attr: 'str' },
-    { id: 'acrobatics',    label: 'Acrobacias',     attr: 'dex' },
-    { id: 'stealth',       label: 'Sigilo',          attr: 'dex' },
-    { id: 'sleight',       label: 'Juego de Manos', attr: 'dex' },
-    { id: 'arcana',        label: 'Arcano',          attr: 'int' },
-    { id: 'history',       label: 'Historia',        attr: 'int' },
-    { id: 'investigation', label: 'Investigación',   attr: 'int' },
-    { id: 'nature',        label: 'Naturaleza',      attr: 'int' },
-    { id: 'religion',      label: 'Religión',        attr: 'int' },
-    { id: 'animal',        label: 'Trato Animales',  attr: 'wis' },
-    { id: 'insight',       label: 'Perspicacia',     attr: 'wis' },
-    { id: 'medicine',      label: 'Medicina',        attr: 'wis' },
-    { id: 'perception',    label: 'Percepción',      attr: 'wis' },
-    { id: 'survival',      label: 'Supervivencia',   attr: 'wis' },
-    { id: 'deception',     label: 'Engaño',          attr: 'cha' },
-    { id: 'intimidation',  label: 'Intimidación',    attr: 'cha' },
-    { id: 'performance',   label: 'Actuación',       attr: 'cha' },
-    { id: 'persuasion',    label: 'Persuasión',      attr: 'cha' },
-  ];
-
-  // Umbrales XP D&D 5e (niveles 1-20)
-  const XP_TABLE = [
-    0, 300, 900, 2700, 6500, 14000, 23000, 34000, 48000, 64000,
-    85000, 100000, 120000, 140000, 165000, 195000, 225000, 265000, 305000, 355000,
-  ];
-
-  const ATTR_ABBR  = { str:'FUE', dex:'DES', con:'CON', int:'INT', wis:'SAB', cha:'CAR' };
-  const ATTR_CLASS = { str:'tag-str', dex:'tag-dex', con:'tag-con', int:'tag-int', wis:'tag-wis', cha:'tag-cha' };
-  const ASI_LEVELS = new Set([4, 8, 12, 16, 19]);
-
-  // Mapa de normalización atributo/habilidad → stat ID
-  const ATTR_MAP = {
-    str:'str', fue:'str', fuerza:'str',
-    dex:'dex', des:'dex', destreza:'dex',
-    con:'con', constitucion:'con',
-    int:'int', inteligencia:'int',
-    wis:'wis', sab:'wis', sabiduria:'wis',
-    cha:'cha', car:'cha', carisma:'cha',
-    atletismo:'str',
-    acrobacias:'dex', sigilo:'dex', 'juego de manos':'dex',
-    arcano:'int', historia:'int', investigacion:'int', naturaleza:'int', religion:'int',
-    'trato animales':'wis', perspicacia:'wis', medicina:'wis', percepcion:'wis', supervivencia:'wis',
-    engano:'cha', intimidacion:'cha', actuacion:'cha', persuasion:'cha',
-  };
-
-  function resolveAttr(raw) {
-    const normalized = raw.toLowerCase()
-      .normalize('NFD').replace(/[̀-ͯ]/g, '')
-      .trim();
-    return ATTR_MAP[normalized] || ATTR_MAP[raw.toLowerCase()] || 'str';
-  }
-
-  // Mapeo stat-id (str/dex/...) → clave en CLASE_STATS (fuerza/destreza/...)
-  const STAT_TO_ES = { str:'fuerza', dex:'destreza', con:'constitucion', int:'inteligencia', wis:'sabiduria', cha:'carisma' };
-
-  function isConsumable(name) {
-    return /poci[oó]n|consumible|hierba|ung[uü]ento|elixir|poderoso/i.test(name);
-  }
 
   // ─────────────────────────────────────────────────────
   // BESTIARIO — cargado desde bestiario.json al inicio
@@ -136,9 +86,6 @@ document.addEventListener('DOMContentLoaded', () => {
   // ─────────────────────────────────────────────────────
   // REFERENCIAS DOM
   // ─────────────────────────────────────────────────────
-  const $  = id => document.getElementById(id);
-  const $$ = sel => document.querySelectorAll(sel);
-
   const hpCurrent = $('hp-current');
   const hpMax     = $('hp-max');
   const hpBar     = $('hp-bar');
@@ -153,8 +100,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const playerInput  = $('player-input');
   const sendBtn      = $('send-btn');
   const diceRollBtn  = $('dice-roll-btn');
-  const diceTrayBtn  = $('dice-tray-btn');
-  const diceTray     = $('dice-tray');
   const chatMessages = $('chat-messages');
   const statusDot    = $('status-dot');
   const statusText   = $('status-text');
@@ -185,45 +130,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const questEmpty         = $('quest-empty');
 
   // ═══════════════════════════════════════════════════════
-  // UTILIDADES
-  // ═══════════════════════════════════════════════════════
-  function escHtml(s) {
-    return String(s)
-      .replace(/&/g, '&amp;').replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-  }
-
-  function mdToHtml(text) {
-    return escHtml(text)
-      .replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>')
-      .replace(/\*([^*\n]+)\*/g,     '<em>$1</em>')
-      .split('\n\n').filter(p => p.trim())
-      .map(p => `<p>${p.replace(/\n/g, '<br>')}</p>`)
-      .join('');
-  }
-
-  // ═══════════════════════════════════════════════════════
   // HP BAR
   // ═══════════════════════════════════════════════════════
-  function updateHealth(target, currentHp, maxHp) {
-    const cur = Math.max(0, parseInt(currentHp) || 0);
-    const max = Math.max(1, parseInt(maxHp) || 1);
-    const pct = Math.min(100, Math.round((cur / max) * 100));
-
-    const barId  = target === 'enemy' ? 'enemy-hp-bar'  : 'player-hp-bar';
-    const textId = target === 'enemy' ? 'enemy-hp-text' : 'player-hp-text';
-    const bar = document.getElementById(barId);
-    const txt = document.getElementById(textId);
-    if (!bar) return;
-    bar.style.width = pct + '%';
-    if (txt) txt.textContent = `${cur} / ${max}`;
-
-    if (pct > 60)      bar.style.background = target === 'enemy' ? 'linear-gradient(90deg,#e74c3c,#c0392b)' : 'linear-gradient(90deg,#2ecc71,#27ae60)';
-    else if (pct > 25) bar.style.background = target === 'enemy' ? 'linear-gradient(90deg,#f39c12,#e67e22)' : 'linear-gradient(90deg,#f1c40f,#f39c12)';
-    else               bar.style.background = target === 'enemy' ? 'linear-gradient(90deg,#7d1010,#c0392b)' : 'linear-gradient(90deg,#b71c1c,#7d1010)';
-  }
-  window.updateHealth = updateHealth;
-
   function updateHpBar() {
     const cur = Math.max(0, parseInt(hpCurrent.value) || 0);
     const max = Math.max(1, parseInt(hpMax.value) || 1);
@@ -239,20 +147,55 @@ document.addEventListener('DOMContentLoaded', () => {
       hpBar.style.background = 'linear-gradient(to right,#7d1010,#c0392b)';
       hpBar.style.animation = 'pulse 1s infinite';
     }
-
-    updateHealth('player', cur, max);
   }
 
   hpCurrent.addEventListener('input', updateHpBar);
   hpMax.addEventListener('input',     updateHpBar);
   updateHpBar();
 
+  // Update combat avatar HP bars
+  function updateHealth(target, currentHp, maxHp) {
+    const cur = Math.max(0, parseInt(currentHp) || 0);
+    const max = Math.max(1, parseInt(maxHp) || 1);
+    const pct = Math.min(100, Math.round((cur / max) * 100));
+
+    const barId = target === 'enemy' ? 'enemy-hp-bar' : 'player-hp-bar';
+    const textId = target === 'enemy' ? 'enemy-hp-text' : 'player-hp-text';
+    const bar = document.getElementById(barId);
+    const txt = document.getElementById(textId);
+    if (!bar) return;
+    bar.style.width = pct + '%';
+    if (txt) txt.textContent = `${cur} / ${max}`;
+
+    // Color feedback
+    if (pct > 60)      bar.style.background = target === 'enemy' ? 'linear-gradient(90deg,#e74c3c,#c0392b)' : 'linear-gradient(90deg,#2ecc71,#27ae60)';
+    else if (pct > 25) bar.style.background = target === 'enemy' ? 'linear-gradient(90deg,#f39c12,#e67e22)' : 'linear-gradient(90deg,#f1c40f,#f39c12)';
+    else               bar.style.background = target === 'enemy' ? 'linear-gradient(90deg,#7d1010,#c0392b)' : 'linear-gradient(90deg,#b71c1c,#7d1010)';
+  }
+  // Exponer para que la IA/DM pueda llamarlo
+  window.updateHealth = updateHealth;
+
+  // Keep player combat bar in sync with main HP inputs
+  const origUpdateHpBar = updateHpBar;
+  updateHpBar = function() {
+    origUpdateHpBar();
+    const cur = Math.max(0, parseInt(hpCurrent.value) || 0);
+    const max = Math.max(1, parseInt(hpMax.value) || 1);
+    updateHealth('player', cur, max);
+  };
+  // Rebind event listeners to the new updateHpBar
+  try {
+    hpCurrent.removeEventListener('input', origUpdateHpBar);
+    hpMax.removeEventListener('input', origUpdateHpBar);
+  } catch(e) {}
+  hpCurrent.addEventListener('input', updateHpBar);
+  hpMax.addEventListener('input', updateHpBar);
+  // Run once to initialize combat bar
+  updateHpBar();
+
   // ═══════════════════════════════════════════════════════
   // MODIFICADORES + STATS DINÁMICOS
   // ═══════════════════════════════════════════════════════
-  const calcMod = v  => Math.floor((v - 10) / 2);
-  const fmtMod  = m  => (m >= 0 ? `+${m}` : `${m}`);
-
   // Valor base de la clase según CLASE_STATS (sin puntos de nivel)
   function getBaseStatValue(statId) {
     const cls = ($('char-class')?.value || state.charClass || '').trim();
@@ -285,12 +228,6 @@ document.addEventListener('DOMContentLoaded', () => {
     mod.textContent = fmtMod(m);
     mod.classList.toggle('positive', m > 0);
     mod.classList.toggle('negative', m < 0);
-    // Refrescar modificador en la bandeja de dados
-    const trayMod = $(`tray-mod-${id}`);
-    if (trayMod) {
-      trayMod.textContent = fmtMod(m);
-      trayMod.className = 'tray-mod' + (m > 0 ? ' positive' : m < 0 ? ' negative' : '');
-    }
   }
 
   // ═══════════════════════════════════════════════════════
@@ -344,10 +281,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   diceOverlay.addEventListener('click', () => diceOverlay.classList.remove('visible'));
   document.addEventListener('keydown', e => {
-    if (e.key === 'Escape') {
-      diceOverlay.classList.remove('visible');
-      closeQuestModal?.();
-    }
+    if (e.key === 'Escape') diceOverlay.classList.remove('visible');
   });
 
   // ═══════════════════════════════════════════════════════
@@ -374,118 +308,6 @@ document.addEventListener('DOMContentLoaded', () => {
       diceRollBtn.classList.remove('roll-requested');
       diceRollBtn.title = 'Esperando petición de tirada...';
     }
-  }
-
-  // ═══════════════════════════════════════════════════════
-  // WEB AUDIO SFX — Sintetizados vía AudioContext (sin .mp3)
-  // Cumple con la política de autoplay de iOS/Safari:
-  // todos los sonidos se disparan desde un gesto del usuario.
-  // ═══════════════════════════════════════════════════════
-  const sfx = (() => {
-    let ctx = null;
-
-    function getCtx() {
-      if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
-      if (ctx.state === 'suspended') ctx.resume();
-      return ctx;
-    }
-
-    // Envolvente estándar: ataque → sustain → release
-    function env(gain, at, dt, sl, rt, now) {
-      gain.gain.setValueAtTime(0, now);
-      gain.gain.linearRampToValueAtTime(1, now + at);
-      gain.gain.linearRampToValueAtTime(sl, now + at + dt);
-      gain.gain.linearRampToValueAtTime(0, now + at + dt + rt);
-    }
-
-    return {
-      // 1. Alerta mística — tono doble ascendente (lo→hi)
-      alert() {
-        try {
-          const ac  = getCtx();
-          const now = ac.currentTime;
-          [220, 440].forEach((freq, i) => {
-            const osc = ac.createOscillator();
-            const g   = ac.createGain();
-            osc.type = 'sine';
-            osc.frequency.setValueAtTime(freq, now + i * 0.18);
-            osc.frequency.linearRampToValueAtTime(freq * 2, now + i * 0.18 + 0.14);
-            g.gain.setValueAtTime(0, now + i * 0.18);
-            g.gain.linearRampToValueAtTime(0.22, now + i * 0.18 + 0.04);
-            g.gain.linearRampToValueAtTime(0, now + i * 0.18 + 0.22);
-            osc.connect(g); g.connect(ac.destination);
-            osc.start(now + i * 0.18);
-            osc.stop(now + i * 0.18 + 0.25);
-          });
-        } catch(e) { /* Safari puede bloquear si no hay gesto previo */ }
-      },
-
-      // 2. Dado rodando — cliqueos de ruido blanco intermitentes
-      roll() {
-        try {
-          const ac  = getCtx();
-          const dur = 1.5;
-          const now = ac.currentTime;
-          const clicks = 28; // número de impactos
-
-          for (let i = 0; i < clicks; i++) {
-            const t   = now + (i / clicks) * dur;
-            const buf = ac.createBuffer(1, ac.sampleRate * 0.012, ac.sampleRate);
-            const data = buf.getChannelData(0);
-            for (let s = 0; s < data.length; s++) data[s] = (Math.random() * 2 - 1) * 0.6;
-            const src = ac.createBufferSource();
-            const g   = ac.createGain();
-            // Los cliques aceleran hacia el final (más impactos por segundo)
-            const decay = 0.008 + (1 - i / clicks) * 0.025;
-            src.buffer = buf;
-            g.gain.setValueAtTime(0.35, t);
-            g.gain.linearRampToValueAtTime(0, t + decay);
-            src.connect(g); g.connect(ac.destination);
-            src.start(t);
-          }
-        } catch(e) {}
-      },
-
-      // 3. Revelación — acorde mayor (éxito) o descenso grave (fallo)
-      result(isSuccess) {
-        try {
-          const ac  = getCtx();
-          const now = ac.currentTime;
-          if (isSuccess) {
-            // Acorde mayor brillante: fundamental + tercera + quinta
-            [523.25, 659.25, 783.99].forEach((freq, i) => {
-              const osc = ac.createOscillator();
-              const g   = ac.createGain();
-              osc.type = 'triangle';
-              osc.frequency.setValueAtTime(freq, now + i * 0.05);
-              env(g, 0.01, 0.1, 0.6, 0.5, now + i * 0.05);
-              osc.connect(g); g.connect(ac.destination);
-              osc.start(now + i * 0.05);
-              osc.stop(now + i * 0.05 + 0.7);
-            });
-          } else {
-            // Descenso grave distorsionado: tono descendente con wave shaping
-            const osc = ac.createOscillator();
-            const g   = ac.createGain();
-            osc.type = 'sawtooth';
-            osc.frequency.setValueAtTime(180, now);
-            osc.frequency.linearRampToValueAtTime(55, now + 0.5);
-            env(g, 0.01, 0.08, 0.5, 0.4, now);
-            g.gain.value = 0.3;
-            osc.connect(g); g.connect(ac.destination);
-            osc.start(now);
-            osc.stop(now + 0.6);
-          }
-        } catch(e) {}
-      },
-    };
-  })();
-
-  // ═══════════════════════════════════════════════════════
-  // HÁPTICA — navigator.vibrate con comprobación de soporte
-  // ═══════════════════════════════════════════════════════
-  function vibe(pattern) {
-    try { if (navigator.vibrate) navigator.vibrate(pattern); } catch(e) {}
   }
 
   // ═══════════════════════════════════════════════════════
@@ -558,6 +380,64 @@ document.addEventListener('DOMContentLoaded', () => {
     themeToggleBtn.textContent = '🌑';
   }
 
+  // ── Efectos cinemáticos BG3-style ─────────────────────
+  function _spawnDiceParticles(container, type) {
+    const colors = {
+      crit: ['#ffe858','#ffd700','#ffb700','#fff4a0','#ffe000'],
+      fail: ['#ff4422','#cc1a0a','#ff6633','#dd2200','#ff3311'],
+      good: ['#00e890','#00bc70','#44ffc0','#00d080','#80ffe0'],
+    };
+    const palette = colors[type] || colors.good;
+    const count   = type === 'crit' ? 18 : 12;
+    for (let i = 0; i < count; i++) {
+      const p    = document.createElement('div');
+      p.className = 'dice-spark';
+      const angle = (i / count) * Math.PI * 2 + (Math.random() - 0.5) * 0.5;
+      const dist0 = 10 + Math.random() * 20;
+      const dist1 = 60 + Math.random() * 90;
+      const size  = 4 + Math.random() * 6;
+      const dur   = 0.5 + Math.random() * 0.35;
+      p.style.cssText = `
+        --tx0: ${Math.cos(angle)*dist0}px; --ty0: ${Math.sin(angle)*dist0}px;
+        --tx1: ${Math.cos(angle)*dist1}px; --ty1: ${Math.sin(angle)*dist1}px;
+        --dur: ${dur}s;
+        width:${size}px; height:${size}px;
+        background:${palette[i % palette.length]};
+        box-shadow: 0 0 ${size*2}px ${palette[i%palette.length]};
+        animation-delay: ${Math.random()*0.08}s;
+      `;
+      container.appendChild(p);
+      setTimeout(() => p.remove(), (dur + 0.15) * 1000);
+    }
+  }
+
+  function _triggerImpactRing(type) {
+    const ring = $('roll-impact-ring');
+    if (!ring) return;
+    ring.className = 'roll-impact-ring';
+    void ring.offsetWidth;
+    ring.classList.add(type === 'crit' ? 'gold' : type === 'fail' ? 'fail' : 'fire');
+    setTimeout(() => { ring.className = 'roll-impact-ring'; }, 700);
+  }
+
+  function _triggerScreenFlash(type) {
+    const flash = $('roll-screen-flash');
+    if (!flash) return;
+    flash.className = 'roll-screen-flash';
+    void flash.offsetWidth;
+    flash.classList.add(type === 'crit' ? 'flash-gold' : type === 'fail' ? 'flash-red' : 'flash-green');
+    setTimeout(() => { flash.className = 'roll-screen-flash'; }, 500);
+  }
+
+  function _triggerCardShake() {
+    const card = $('roll-cinematic-card');
+    if (!card) return;
+    card.classList.remove('impact-shake');
+    void card.offsetWidth;
+    card.classList.add('impact-shake');
+    setTimeout(() => card.classList.remove('impact-shake'), 520);
+  }
+
   function triggerDiceRoll() {
     if (!state.pendingRoll || state.isStreaming) return;
 
@@ -594,11 +474,14 @@ document.addEventListener('DOMContentLoaded', () => {
     overlay.classList.add('visible');
     sfx.alert(); // Sonido de alerta al aparecer el overlay
 
+    const bgRunes = $('roll-bg-runes');
+
     // ── FASE 2: Click en el dado → animación de lanzamiento ──
     function onDiceClick() {
       diceBtn.removeEventListener('click', onDiceClick);
       diceBtn.classList.add('rolling');
       hintEl.style.opacity = '0';
+      if (bgRunes) bgRunes.classList.add('active');
 
       sfx.roll(); // Cliqueo intermitente durante el giro
 
@@ -612,19 +495,34 @@ document.addEventListener('DOMContentLoaded', () => {
         numberEl.textContent = Math.floor(Math.random() * 20) + 1;
       }, 45);
 
-      // ── FASE 3: Tras 1500ms — impacto y revelación ──
+      // ── FASE 3: Tras 1500ms — impacto y revelación BG3-style ──
       setTimeout(() => {
         clearInterval(spinInterval);
+        if (bgRunes) bgRunes.classList.remove('active');
         diceBtn.classList.remove('rolling');
         diceBtn.classList.add('revealed');
 
+        // Slam del número con animación
         numberEl.textContent = roll;
+        numberEl.classList.remove('slam');
+        void numberEl.offsetWidth;
+        numberEl.classList.add('slam');
 
         const isCrit = roll === 20;
         const isFail = roll <= 4;
+        const effectType = isCrit ? 'crit' : isFail ? 'fail' : 'good';
         if (isCrit)      diceBtn.classList.add('crit-result');
         else if (isFail) diceBtn.classList.add('fail-result');
         else             diceBtn.classList.add('good-result');
+
+        // Efectos de impacto: onda + flash + partículas + sacudida
+        const perspEl = $('roll-d20-perspective');
+        _triggerImpactRing(effectType);
+        _triggerScreenFlash(effectType);
+        _triggerCardShake();
+        if (perspEl) _spawnDiceParticles(perspEl, effectType);
+        // Doble onda con retardo para críticos
+        if (isCrit) setTimeout(() => _triggerImpactRing('crit'), 200);
 
         sfx.result(!isFail);
 
@@ -672,95 +570,6 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   diceRollBtn?.addEventListener('click', triggerDiceRoll);
-
-  // ── Bandeja de dados manual ──────────────────────────────
-  function closeDiceTray() {
-    diceTray?.setAttribute('aria-hidden', 'true');
-    diceTray?.classList.remove('open');
-    diceTrayBtn?.classList.remove('active');
-  }
-
-  diceTrayBtn?.addEventListener('click', e => {
-    e.stopPropagation();
-    const isOpen = diceTray.classList.contains('open');
-    if (isOpen) {
-      closeDiceTray();
-    } else {
-      diceTray.setAttribute('aria-hidden', 'false');
-      diceTray.classList.add('open');
-      diceTrayBtn.classList.add('active');
-    }
-  });
-
-  document.addEventListener('click', e => {
-    if (diceTray?.classList.contains('open') &&
-        !diceTray.contains(e.target) &&
-        e.target !== diceTrayBtn) {
-      closeDiceTray();
-    }
-  });
-
-  // Comprobaciones de atributo desde la bandeja (igual que los botones de la hoja)
-  $$('.dice-attr-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const statId = btn.dataset.stat;
-      const label  = btn.dataset.label;
-      const val    = parseInt($(`stat-${statId}`)?.value) || 10;
-      const mod    = calcMod(val);
-      const roll   = rollD20();
-      const total  = roll + mod;
-
-      showDiceOverlay(roll, mod, label);
-
-      let prefix;
-      if (roll === 20)     prefix = `[¡Crítico! Tirada de ${label}: 20 natural → Total ${total}] `;
-      else if (roll === 1) prefix = `[¡Pifia! Tirada de ${label}: 1 natural — fallo catastrófico] `;
-      else                 prefix = `[Tirada de ${label}: ${roll} ${fmtMod(mod)} = ${total}] `;
-
-      const current = playerInput.value.trim();
-      playerInput.value = current ? current + ' ' + prefix : prefix;
-      playerInput.focus();
-
-      diceFlash.textContent = '🎲 ' + prefix.replace(/[\[\]]/g, '').trim();
-      diceFlash.classList.add('visible');
-      setTimeout(() => diceFlash.classList.remove('visible'), 4000);
-
-      closeDiceTray();
-    });
-  });
-
-  // Dados libres (D4–D100) desde la bandeja
-  $$('.dice-free-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const sides = parseInt(btn.dataset.sides);
-      const roll  = Math.floor(Math.random() * sides) + 1;
-
-      diceNumber.className = 'dice-number';
-      diceNumber.textContent = roll;
-      if (sides === 20 && roll === 20) {
-        diceNumber.classList.add('crit-success');
-        diceDetail.textContent = `D20 → ${roll} ¡CRÍTICO NATURAL!`;
-      } else if (sides === 20 && roll === 1) {
-        diceNumber.classList.add('crit-fail');
-        diceDetail.textContent = `D20 → ${roll} ¡PIFIA NATURAL!`;
-      } else {
-        diceDetail.textContent = `D${sides} → ${roll}`;
-      }
-      diceOverlay.classList.add('visible');
-
-      const prefix = `[Tirada D${sides}: ${roll}] `;
-      const current = playerInput.value.trim();
-      playerInput.value = current ? current + ' ' + prefix : prefix;
-      playerInput.focus();
-
-      diceFlash.textContent = `🎲 D${sides}: ${roll}`;
-      diceFlash.classList.add('visible');
-      setTimeout(() => diceFlash.classList.remove('visible'), 4000);
-
-      closeDiceTray();
-    });
-  });
-
   $('battle-panel-close')?.addEventListener('click', () => endCombat());
 
   // ═══════════════════════════════════════════════════════
@@ -944,63 +753,32 @@ document.addEventListener('DOMContentLoaded', () => {
     active.forEach(q => {
       const el = document.createElement('div');
       el.className = 'quest-item quest-active';
-      el.setAttribute('role', 'button');
-      el.setAttribute('tabindex', '0');
-      el.title = 'Ver detalles de la misión';
-      el.innerHTML = `<span class="quest-dot"></span><span class="quest-title">${escHtml(q.title)}</span><span class="quest-expand-icon" aria-hidden="true">›</span>`;
-      el.addEventListener('click', () => showQuestModal(q.id));
-      el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') showQuestModal(q.id); });
+      el.innerHTML = `<span class="quest-dot"></span><span class="quest-title">${escHtml(q.title)}</span>`;
       questActiveList.appendChild(el);
     });
 
     completed.forEach(q => {
       const el = document.createElement('div');
       el.className = 'quest-item quest-completed';
-      el.setAttribute('role', 'button');
-      el.setAttribute('tabindex', '0');
-      el.title = 'Ver detalles de la misión';
-      el.innerHTML = `<span class="quest-check">✓</span><span class="quest-title">${escHtml(q.title)}</span><span class="quest-expand-icon" aria-hidden="true">›</span>`;
-      el.addEventListener('click', () => showQuestModal(q.id));
-      el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') showQuestModal(q.id); });
+      el.innerHTML = `<span class="quest-check">✓</span><span class="quest-title">${escHtml(q.title)}</span>`;
       questCompletedList.appendChild(el);
     });
   }
 
-  // Compara dos títulos de misión ignorando artículos y variaciones menores
-  function questSimilar(a, b) {
-    const normalize = s => s.toLowerCase()
-      .replace(/\b(un|una|el|la|los|las|de|del|al|con|por|para|que|en|a|y|e|o|u|ese|esa|este|esta)\b/g, ' ')
-      .replace(/[^\w\s]/g, ' ')
-      .replace(/\s+/g, ' ').trim();
-    const wordsA = new Set(normalize(a).split(' ').filter(Boolean));
-    const wordsB = new Set(normalize(b).split(' ').filter(Boolean));
-    const intersection = [...wordsA].filter(w => wordsB.has(w)).length;
-    const union = new Set([...wordsA, ...wordsB]).size;
-    return union > 0 && (intersection / union) >= 0.65;
-  }
-
-  function addQuest(questObj) {
-    const t = (typeof questObj === 'string' ? questObj : questObj.title).trim();
-    const description = typeof questObj === 'string' ? '' : (questObj.description || '');
-    const already = state.quests.find(q =>
-      q.title.toLowerCase() === t.toLowerCase() || questSimilar(q.title, t)
-    );
+  function addQuest(title) {
+    const already = state.quests.find(q => q.title.toLowerCase() === title.toLowerCase().trim());
     if (already) return;
-    state.quests.push({ id: 'quest_' + Date.now(), title: t, description, status: 'active' });
+    state.quests.push({ id: 'quest_' + Date.now(), title: title.trim(), status: 'active' });
     renderQuests();
     saveGameState();
-    addSystemMessage(`📜 Nueva misión: "${t}"`);
-    logProgress(`Aceptó la misión: "${t}".`, 'mision');
+    addSystemMessage(`📜 Nueva misión: "${title.trim()}"`);
+    logProgress(`Aceptó la misión: "${title.trim()}".`, 'mision');
   }
 
   function completeQuest(title) {
-    const t = title.trim();
+    const lower = title.toLowerCase().trim();
     const quest = state.quests.find(
-      q => q.status === 'active' && (
-        q.title.toLowerCase() === t.toLowerCase() ||
-        q.title.toLowerCase().includes(t.toLowerCase()) ||
-        questSimilar(q.title, t)
-      )
+      q => q.title.toLowerCase() === lower || q.title.toLowerCase().includes(lower)
     );
     if (quest && quest.status !== 'completed') {
       quest.status = 'completed';
@@ -1010,54 +788,6 @@ document.addEventListener('DOMContentLoaded', () => {
       logProgress(`Completó la misión: "${quest.title}".`, 'mision');
     }
   }
-
-  // ── Modal de detalle de misión ───────────────────────────
-  function showQuestModal(questId) {
-    const quest = state.quests.find(q => q.id === questId);
-    if (!quest) return;
-
-    const modal      = $('quest-modal');
-    const titleEl    = $('quest-modal-title');
-    const descEl     = $('quest-modal-desc');
-    const statusEl   = $('quest-modal-status');
-    const iconEl     = $('quest-modal-icon');
-    const completeBtn = $('quest-modal-complete-btn');
-
-    titleEl.textContent = quest.title;
-
-    if (quest.description) {
-      descEl.textContent = quest.description;
-      descEl.className = 'quest-modal-desc';
-    } else {
-      descEl.textContent = 'Sin descripción adicional registrada.';
-      descEl.className = 'quest-modal-desc no-desc';
-    }
-
-    const isActive = quest.status === 'active';
-    iconEl.textContent = isActive ? '📜' : '✅';
-    statusEl.textContent = isActive ? '⬤ Activa' : '✓ Completada';
-    statusEl.className = 'quest-modal-status ' + quest.status;
-    completeBtn.style.display = isActive ? '' : 'none';
-
-    completeBtn.onclick = () => {
-      completeQuest(quest.title);
-      closeQuestModal();
-    };
-
-    modal.removeAttribute('aria-hidden');
-    modal.classList.add('visible');
-  }
-
-  function closeQuestModal() {
-    const modal = $('quest-modal');
-    modal.classList.remove('visible');
-    modal.setAttribute('aria-hidden', 'true');
-  }
-
-  $('quest-modal-close-btn')?.addEventListener('click', closeQuestModal);
-  $('quest-modal')?.addEventListener('click', e => {
-    if (e.target === $('quest-modal')) closeQuestModal();
-  });
 
   // Toggle diario
   const questToggle = $('quest-toggle');
@@ -1092,6 +822,15 @@ document.addEventListener('DOMContentLoaded', () => {
     chatMessages.appendChild(el);
     scrollBottom();
     if (save) { state.chatLog.push({ type: 'player', content: text }); saveChatLog(); }
+  }
+
+  function addDmMessage(html, save = true) {
+    const el = document.createElement('div');
+    el.className = 'message dm-message';
+    el.innerHTML = `<div class="msg-avatar">DM</div><div class="msg-body">${html}</div>`;
+    chatMessages.appendChild(el);
+    scrollBottom();
+    if (save) { state.chatLog.push({ type: 'dm', html }); saveChatLog(); }
   }
 
   function createDmStreamMessage() {
@@ -1339,6 +1078,55 @@ document.addEventListener('DOMContentLoaded', () => {
   // BESTIARIO — búsqueda por ID o nombre
   // ═══════════════════════════════════════════════════════
 
+  // Alias para IDs de NPC que la IA puede usar de forma distinta al bestiario
+  const NPC_ALIASES = {
+    comerciante: 'mercader-oscuro', tienda: 'mercader-oscuro', vendedor: 'mercader-oscuro',
+    merchant: 'mercader-oscuro', shopkeeper: 'mercader-oscuro',
+    guardia: 'guardia-puerta', guard: 'guardia-puerta', soldado: 'guardia-de-caminos',
+    centinela: 'guardia-puerta', vigilante: 'guardia-puerta',
+    capitan: 'capitan-de-la-guardia', capitán: 'capitan-de-la-guardia',
+    rey: 'rey', king: 'rey', monarca: 'rey', principe: 'rey', príncipe: 'rey', noble: 'rey',
+    sacerdote: 'sacerdotisa', sacerdotisa: 'sacerdotisa', priest: 'sacerdotisa', cura: 'sacerdotisa',
+    tabernero: 'tabernero', posadero: 'tabernero', tavern: 'tabernero',
+    herrero: 'herrero', smith: 'herrero', blacksmith: 'herrero',
+    mago: 'alquimista', maga: 'alquimista', alquimista: 'alquimista', wizard: 'alquimista',
+    alcalde: 'alcalde', mayor: 'alcalde',
+    viajero: 'viajero-tierras-lejanas', traveler: 'viajero-tierras-lejanas',
+    asesino: 'asesino', assassin: 'asesino',
+    caballero: 'caballero-veterano', knight: 'caballero-veterano',
+    huerfano: 'huerfano', orphan: 'huerfano', niño: 'huerfano',
+    nina: 'nina-mistica', niña: 'nina-mistica', girl: 'nina-mistica',
+    paladin: 'paladin-espectral', paladín: 'paladin-espectral', fantasma: 'paladin-espectral',
+    bufon: 'buffon', bufón: 'buffon', jester: 'buffon',
+  };
+
+  function lookupNpcByName(id) {
+    if (!id) return null;
+    const norm = s => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g,'-');
+    const key = norm(id);
+    // Búsqueda directa
+    if (bestiario.npcs[key]) return { id: key, ...bestiario.npcs[key] };
+    // Alias exacto
+    const aliased = NPC_ALIASES[key];
+    if (aliased && bestiario.npcs[aliased]) return { id: aliased, ...bestiario.npcs[aliased] };
+    // Alias parcial (la IA puede usar "guardia-de-la-ciudad")
+    for (const [alias, target] of Object.entries(NPC_ALIASES)) {
+      if (key.includes(alias) || alias.includes(key)) {
+        if (bestiario.npcs[target]) return { id: target, ...bestiario.npcs[target] };
+      }
+    }
+    // Búsqueda parcial en claves del bestiario
+    for (const [bKey, data] of Object.entries(bestiario.npcs)) {
+      if (key.includes(bKey) || bKey.includes(key)) return { id: bKey, ...data };
+    }
+    // Búsqueda por nombre de NPC
+    for (const [bKey, data] of Object.entries(bestiario.npcs)) {
+      const bn = norm(data.nombre || '');
+      if (key.includes(bn) || bn.includes(key)) return { id: bKey, ...data };
+    }
+    return null;
+  }
+
   function lookupEnemyByName(name) {
     if (!name || !Object.keys(bestiario.enemigos).length) return null;
     const norm = s => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
@@ -1408,6 +1196,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  function renderChatImage(prompt) {
+    if (!prompt) return;
+    // Visiones del chat ahora usan una imagen por defecto estática para evitar CORS
+    // (Este sistema se puede mejorar en el futuro con un catálogo de imágenes estáticas)
+  }
+
   // ═══════════════════════════════════════════════════════
   // UI STATE — estados visuales unificados
   // ═══════════════════════════════════════════════════════
@@ -1466,6 +1260,7 @@ document.addEventListener('DOMContentLoaded', () => {
           rImg.alt = `Avatar de ${entityData.name || 'enemigo'}`;
         }
         updateHealth('enemy', entityData.hpMax || 10, entityData.hpMax || 10);
+        _updateEnemyStack(entityData.count || 1);
       }
       rCard.setAttribute('aria-hidden', 'false');
       rCard.classList.remove('active');
@@ -1615,21 +1410,35 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // ─ Combate ──────────────────────────────────────────
-  function showEnemyCard(prompt, name) {
+  function showEnemyCard(prompt, name, count = 1) {
     const bData  = bestiario.enemigos[prompt] || lookupEnemyByName(name);
     const hpMax  = bData ? bData.hpMax : 10;
     const imgUrl = bData ? bData.img   : getEnemyImageUrl(name);
+    const n      = Math.max(1, Math.min(3, count));
 
     updatePlayerAvatar();
 
     state.activeEnemy = {
       prompt, name, hpMax, hpCurrent: hpMax,
       dano: bData?.dano ?? null, ca: bData?.ca ?? null, img: imgUrl,
+      count: n,
     };
     lsSave('rpg_active_enemy', JSON.stringify(state.activeEnemy));
 
-    updateEntityUI('enemy', { name, img: imgUrl, hpMax }, true);
+    updateEntityUI('enemy', { name, img: imgUrl, hpMax, count: n }, true);
     vibe([20, 15, 50]);
+  }
+
+  function _updateEnemyStack(count) {
+    const wrapper = $('enemy-stack-wrapper');
+    const badge   = $('enemy-count-badge');
+    if (!wrapper) return;
+    wrapper.classList.remove('stack-1', 'stack-2', 'stack-3');
+    const n = Math.max(1, Math.min(3, count || 1));
+    wrapper.classList.add(`stack-${n}`);
+    if (badge) {
+      badge.textContent = n > 1 ? `×${n}` : '';
+    }
   }
 
   function defeatEnemy() {
@@ -1638,10 +1447,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const overlay = $('death-overlay');
     if (!card?.classList.contains('active')) return;
 
-    // Capturar nombre antes de que se limpie el estado
     const defeatedName = state.activeEnemy?.name || 'enemigo';
-    logProgress(`Derrotó a ${defeatedName}.`, 'victoria');
+    const remaining    = (state.activeEnemy?.count || 1) - 1;
 
+    logProgress(`Derrotó a ${defeatedName}.`, 'victoria');
     overlay?.classList.add('visible');
     sfx.result(false);
     vibe([80, 40, 120]);
@@ -1657,9 +1466,24 @@ document.addEventListener('DOMContentLoaded', () => {
         card.setAttribute('aria-hidden', 'true');
         overlay?.classList.remove('visible');
         if (imgEl) { imgEl.style.filter = ''; imgEl.style.transition = ''; }
-        state.activeEnemy = null;
-        localStorage.removeItem('rpg_active_enemy');
-        updateEntityUI('enemy', null, false); // actualiza estado y muestra NPC si hay uno pendiente
+
+        if (remaining > 0 && state.activeEnemy) {
+          // Quedan enemigos del mismo tipo — decrementar y reanimar la tarjeta
+          state.activeEnemy.count    = remaining;
+          state.activeEnemy.hpCurrent = state.activeEnemy.hpMax;
+          lsSave('rpg_active_enemy', JSON.stringify(state.activeEnemy));
+          _updateEnemyStack(remaining);
+          updateHealth('enemy', state.activeEnemy.hpMax, state.activeEnemy.hpMax);
+          card.setAttribute('aria-hidden', 'false');
+          card.classList.remove('active');
+          void card.offsetWidth;
+          card.classList.add('active', 'mode-combat');
+        } else {
+          state.activeEnemy = null;
+          localStorage.removeItem('rpg_active_enemy');
+          _updateEnemyStack(1);
+          updateEntityUI('enemy', null, false);
+        }
       }, 650);
     }, 1100);
   }
@@ -1672,6 +1496,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const overlay = $('death-overlay');
     state.activeEnemy = null;
     localStorage.removeItem('rpg_active_enemy');
+    _updateEnemyStack(1);
     addSystemMessage('🏃 El combate ha concluido.');
     if (card?.classList.contains('active')) {
       card.classList.add('defeated');
@@ -1690,11 +1515,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // ─ NPCs ─────────────────────────────────────────────
   function showNpcCard(id) {
-    const npcData = bestiario.npcs[id];
-    if (!npcData) { console.warn(`[Bestiario] NPC no encontrado: "${id}"`); return; }
-    state.activeNpc = { id, ...npcData };
+    const found = bestiario.npcs[id] ? { id, ...bestiario.npcs[id] } : lookupNpcByName(id);
+    if (!found) { console.warn(`[Bestiario] NPC no encontrado: "${id}"`); return; }
+    state.activeNpc = { ...found };
     const locKey = state.currentLocation?.id || 'global';
-    const storedName = state.npcNames[`${id}@${locKey}`];
+    const storedName = state.npcNames[`${found.id}@${locKey}`];
     if (storedName) state.activeNpc.nombre = storedName;
     lsSave('rpg_active_npc', JSON.stringify(state.activeNpc));
     updateEntityUI('npc', state.activeNpc, true);
@@ -1993,102 +1818,6 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // ═══════════════════════════════════════════════════════
-  // SYSTEM PROMPT — dinámico con nombre, clase y nuevas etiquetas
-  // ═══════════════════════════════════════════════════════
-  function buildDmCore() {
-    const name = $('char-name').value.trim() || state.charName || 'el aventurero';
-    const cls  = $('char-class').value.trim() || state.charClass || 'aventurero';
-    return `Eres un Dungeon Master experto narrando una campaña de rol de texto en español.
-El personaje que controla el jugador se llama ${name} y es un/a ${cls}.
-
-PROTOCOLO DE NARRACIÓN (OBLIGATORIO):
-- Máximo 3 párrafos cortos por respuesta. Si una escena requiere más descripción, envía solo la primera parte y termina con "▶ *[escribe 'continúa' para seguir]*". Espera confirmación antes de enviar el resto. Nunca cortes una frase a mitad.
-- Siempre termina con una pregunta o situación que requiera decisión del jugador.
-
-REGLAS INQUEBRANTABLES:
-- Narras siempre en segunda persona ("Ves...", "Sientes...", "Escuchas...")
-- Tono dramático, cinematográfico y atmosférico. Describes entornos, sonidos, olores y texturas
-- Cada respuesta avanza la historia y termina dejando una situación que requiere decisión
-- Interpretas los dados con coherencia: 20 natural = éxito heroico épico; 1 = pifia catastrófica
-- Respetas la hoja de personaje: HP, estadísticas e inventario definen lo que el personaje puede hacer
-- Mantén la coherencia con el resumen de historia y el lore del mundo
-- Respuestas de 2 a 4 párrafos. Sé evocador y concreto, no vago
-- NUNCA rompas el personaje ni menciones que eres una IA
-
-USO OBLIGATORIO DEL DIARIO DE CAMPAÑA (MEMORIA HISTÓRICA):
-Antes de generar cualquier respuesta narrativa, DEBES leer el bloque "RESUMEN DE LA AVENTURA HASTA EL MOMENTO" que se te ha inyectado en el contexto. Tu obligación es:
-1. Identificar activamente todos los NPCs mencionados (sus nombres, relaciones y estado: vivo/muerto/aliado/enemigo) y hacer referencias cruzadas naturales. Si el jugador interactúa con alguien que aparece en el diario, ese personaje DEBE recordar los eventos pasados y reaccionar en consecuencia (un tabernero cuyo hijo fue salvado dará las gracias o hará un descuento; un herrero al que se le pagó la deuda ofrecerá mejor precio; un guardia que fue burlado estará hostil).
-2. Recordar todos los lugares visitados: sus nombres, atmósfera, habitantes relevantes y lo que ocurrió allí. No describas un lugar ya visitado como si fuera nuevo.
-3. Respetar el estado actual de las misiones: si una misión está en el diario como completada, trátala como resuelta. Si está activa, puedes referirte a ella como objetivo pendiente.
-
-PROHIBICIÓN ABSOLUTA DE CONTRADICCIONES:
-Bajo ninguna circunstancia puedes contradecir los hechos registrados en el Diario de Campaña. Si el diario dice que un NPC murió, ese personaje está muerto para siempre y no puede reaparecer vivo. Si una ciudad fue destruida, sigue en ruinas. Si el jugador ya consiguió un objeto, no puede encontrarlo de nuevo. Los hechos del pasado son inmutables: son la realidad del mundo que habitas como narrador.
-
-SISTEMA DE ETIQUETAS — REGLAS DE COHERENCIA ESTRICTAS:
-
-[GAIN_XP: N] — REGLA DE CÓDIGO: esta etiqueta SOLO produce efecto si el mismo mensaje incluye [ENEMY_DEFEATED] o [COMPLETE_QUEST:]. Sin esas etiquetas, el motor DESCARTA el XP automáticamente. Por tanto:
-  · Victoria en combate → REQUIERE [ENEMY_DEFEATED] en este turno. Usa 50–150 XP según dificultad.
-  · Misión completada → REQUIERE [COMPLETE_QUEST: título] en este turno. Usa 100–200 XP.
-  · Ambos en el mismo turno (derrota un jefe y cierra misión) → puedes incluir ambas etiquetas; el XP máximo combinado es 300.
-  PROHIBICIÓN: NO incluyas [GAIN_XP] en conversaciones, exploración sin peligro, diálogos, transiciones ni acciones menores. El código lo ignorará de todas formas, pero mantenlo coherente con tu narración.
-  LÍMITE: una sola etiqueta [GAIN_XP] por respuesta. Si incluyes varias, solo se aplica la primera.
-
-[LOSE_HP: N] — Solo si el jugador recibe daño físico real en este turno. Rango: 1–999. Omítela si no hay daño.
-[GAIN_HP: N] — Solo si el jugador se cura (poción, descanso, hechizo) en este turno. Omítela si no hay curación. Nunca uses [LOSE_HP] y [GAIN_HP] en la misma respuesta.
-
-[REQUEST_ROLL: Atributo] — Cuando la historia exige que el jugador tire dados para resolver una acción (combate, habilidad, salvación). Usa el nombre español del atributo o habilidad (ej: "Fuerza", "Percepción", "Sigilo", "Destreza"). La interfaz activará automáticamente el botón de dado para el jugador. Incluye SOLO cuando sea dramáticamente necesario.
-
-[ADD_ITEM: Nombre del Objeto] — Cuando el jugador obtenga un objeto, arma, armadura o recompensa tangible. El objeto se añadirá automáticamente a su inventario visual. Sé preciso con el nombre.
-[REMOVE_ITEM: Nombre del Objeto] — Cuando el jugador pierda, consuma, entregue o destruya un objeto. Se eliminará del inventario. Usa el nombre exacto que se usó al añadirlo.
-
-[ADD_QUEST: Título | Descripción completa] — Cuando el jugador acepte un nuevo encargo, misión u objetivo narrativo. El Título debe ser corto y descriptivo (máx. 5 palabras). La Descripción (tras el "|") debe explicar el objetivo, el contexto y la recompensa conocida en 1-2 frases. REGLA CRÍTICA: ANTES de usar esta etiqueta, consulta las "Misiones activas". Si ya existe una misión con el mismo objetivo, NO la vuelvas a añadir. Solo añade esta etiqueta UNA VEZ por misión nueva y real.
-[COMPLETE_QUEST: Título de la Misión] — Cuando el jugador complete oficialmente una misión. Usa el mismo Título EXACTO que pusiste en [ADD_QUEST], sin cambiar ni una palabra.
-
-[UPDATE_DIARY: Entrada narrativa] — OBLIGATORIO en cualquiera de estos casos:
-  · Primera visita a un lugar con nombre (ciudad, aldea, mazmorra, taberna, torre, templo, bosque, etc.) — SIEMPRE, aunque sea una transición menor.
-  · Derrota de un enemigo con nombre propio o relevante para la trama.
-  · Obtención de un objeto clave, mágico o de valor narrativo.
-  · Primer encuentro con un NPC con nombre propio (aliado, enemigo, neutral).
-  · Alianza, traición, muerte de un personaje relevante, o giro narrativo mayor.
-  Escribe 1-3 frases en tercera persona que capturen el tono emocional del momento, no solo los hechos secos. Ej: "El aventurero descendió a las catacumbas de Valdris. La oscuridad apestaba a muerte y el silencio era ensordecedor. Allí encontró al anciano Mordecai, encadenado pero vivo." Omite SOLO en conversación ordinaria sin lugares ni personajes nuevos.
-
-[NPC_MEMO: Nombre|Actitud|Nota] — Registra la PRIMERA VEZ que el jugador interactúa con un NPC con nombre propio. Actitud: Aliado / Neutral / Hostil / Desconocido / Misterioso. Nota: una frase que capture quién es, qué quiere y qué relación tiene con el jugador. Ej: [NPC_MEMO: Tabernera Mira|Aliado|Vieja conocida del pueblo; guarda secretos sobre las desapariciones y ofrece información a cambio de favores]
-
-[LOCATION_MEMO: Nombre del Lugar|Descripción] — Registra la PRIMERA VEZ que el jugador llega a un lugar con nombre. Descripción: una frase con su atmósfera, rasgo principal o importancia narrativa. Ej: [LOCATION_MEMO: Catacumbas de Valdris|Laberinto de criptas bajo la ciudad; huele a muerte y magia oscura; hogar de los no-muertos que sirven al Nigromante]
-
-[MORAL_NOTE: Resumen de la decisión] — Registra decisiones moralmente relevantes que puedan tener consecuencias: traiciones, sacrificios, alianzas inusuales, abandono de inocentes, uso de magia oscura, pactos con entidades peligrosas. Ej: [MORAL_NOTE: El aventurero dejó escapar al bandido a cambio de información, desobedeciéndole al Gremio]
-
-[COMPRESS_DIARY: Resumen comprimido] — Incluye SOLO cuando el sistema te avise de que la crónica es demasiado larga. Escribe un resumen comprimido de ≤400 palabras que reemplace los eventos anteriores. Prioriza: nombres de NPCs y su estado, localizaciones visitadas con su relevancia, decisiones morales, misiones activas y el estado actual de la historia. Descarta detalles menores.
-
-[GENERATE_IMAGE: prompt-en-ingles] — Añade ÚNICAMENTE en estas tres situaciones:
-  1. PERSONAJE NUEVO: cuando introduzcas por primera vez un NPC, monstruo o enemigo importante. Describe su aspecto visual.
-  2. LOCALIZACIÓN: cuando el jugador llegue a un escenario relevante nuevo (mazmorra, taberna, bosque, ciudad). Describe la atmósfera.
-  3. OBJETO CLAVE: cuando el jugador obtenga o vea un arma mágica, artefacto, mapa o tesoro con peso narrativo.
-  Prompt SIEMPRE en inglés, palabras separadas por guiones, estilo dark-fantasy, máximo 8 palabras. Ej: [GENERATE_IMAGE: scarred-orc-warlord-torchlight-dramatic]
-  IMPORTANTE: Para enemigos en combate activo usa [ENEMY_CARD] en su lugar, NO [GENERATE_IMAGE].
-
-[ENEMY_CARD: id-bestiario|Nombre del Enemigo] — Añade cuando el jugador entre en combate directo con un enemigo. El primer campo DEBE ser exactamente uno de estos IDs del bestiario: goblin-1, goblin-2, orc, troll, dragon, skeletor, zombie, vampire, demonio, golem, gorgona, minotauro, nigromante, hombre-lobo, gargola, caballero, arana, arpia, ghost, mimo. El segundo campo es el nombre en español. Ej: [ENEMY_CARD: goblin-1|Goblin Explorador]
-
-[ENEMY_LOSE_HP: N] — Añade CADA VEZ que el jugador infliga daño al enemigo. N = daño infligido. NO uses si el ataque falla. Actualiza la barra de HP del enemigo.
-
-[ENEMY_DEFEATED] — Añade SOLO cuando el jugador derrota definitivamente al enemigo (HP ≤ 0). Elimina la tarjeta con animación.
-
-[NPC_CARD: id-npc] — Añade cuando el jugador inicie una conversación relevante con un personaje del mundo. El id DEBE ser uno de: alcalde, alquimista, asesino, buffon, caballero-veterano, capitan-de-la-guardia, guardia-de-caminos, guardia-puerta, herrero, huerfano, mercader-oscuro, nina-mistica, paladin-espectral, rey, sacerdotisa, tabernero, viajero-tierras-lejanas. Muestra la tarjeta del NPC (SIN barra de vida) en el lateral. NO usar durante combate activo. Ej: [NPC_CARD: herrero]
-
-[NPC_NAME: id-npc|Nombre] — Usa SOLO la primera vez que le das un nombre propio a un NPC en una ubicación concreta. El sistema vincula ese nombre a la ubicación actual: el mismo tipo de NPC tendrá nombres distintos en cada ciudad. Si el bloque NPC EN CONVERSACIÓN ya indica un nombre registrado para esta ubicación, NO uses esta etiqueta. Ej: [NPC_NAME: tabernero|Aldric el Gordo]
-
-[SET_LOCATION: Nombre del Lugar] — Emite CADA VEZ que el jugador se traslade a un lugar con nombre, tanto en primera visita como en regreso. En primera visita úsalo JUNTO a [LOCATION_MEMO]. En revisitas úsalo solo. Es imprescindible para que el sistema sepa en qué ciudad está el jugador y asigne la identidad correcta a cada NPC. Ej: [SET_LOCATION: Puerto Oscuro]
-
-[END_CONVERSATION] — Añade cuando la conversación con el NPC termine (el jugador se despide, cambia de escena o el diálogo llega a su fin natural). Oculta la tarjeta del NPC.
-
-[END_COMBAT] — OBLIGATORIO si el combate termina sin que el enemigo sea derrotado: el jugador huye con éxito, se produce una tregua, el enemigo escapa, o la escena de batalla concluye por razones narrativas. Incluye SIEMPRE este tag al final de tu respuesta en esos casos para cerrar la interfaz de batalla. NO lo uses si el combate continúa. Si el enemigo llega a 0 HP usa [ENEMY_DEFEATED] en su lugar.
-
-[UPDATE_WORLD: clave|valor] — Actualiza el Estado del Mundo cuando ocurra un cambio permanente: ciudad destruida/liberada, NPC clave muerto/aliado/traicionado, facción que cambia de actitud. Clave en kebab-case (ej: "ciudad-puerto-oscuro", "npc-rey-alaric", "faccion-gremio"). Valor: frase corta (ej: "destruida", "aliado-del-jugador", "muerto-en-acto-III"). Ej: [UPDATE_WORLD: ciudad-millhaven|saqueada-por-el-jugador]
-
-Todas las etiquetas van SIEMPRE al final del mensaje, nunca en medio del texto.`;
-  }
-
-  // ═══════════════════════════════════════════════════════
   // HOJA DE PERSONAJE — bloque para el sistema prompt
   // ═══════════════════════════════════════════════════════
   function buildCharBlock() {
@@ -2246,6 +1975,8 @@ IMPORTANTE: Interpreta a este personaje con coherencia total a su personalidad y
             const token = chunk?.choices?.[0]?.delta?.content ?? '';
             if (token) {
               fullText += token;
+              dmBody.textContent = fullText;
+              scrollBottom();
             }
           } catch { /* fragmento incompleto */ }
         }
@@ -2261,9 +1992,9 @@ IMPORTANTE: Interpreta a este personaje con coherencia total a su personalidad y
   // ═══════════════════════════════════════════════════════
   async function _callGroq(key, systemText, dmBody) {
     const models = [
-      'llama-3.3-70b-versatile', // Meta 70B — el mejor para narrativa
-      'llama-3.1-70b-versatile', // Meta 70B alternativa
-      'mixtral-8x7b-32768',      // Mixtral 8x7B — rápido y versátil
+      'openai/gpt-oss-120b',     // El más inteligente y literario (120B)
+      'llama-3.3-70b-versatile', // Meta 70B — excelente para rol
+      'openai/gpt-oss-20b',      // Modelo intermedio ultra-veloz
       'llama-3.1-8b-instant',    // Salvavidas rápido
     ];
     for (const model of models) {
@@ -2315,7 +2046,7 @@ IMPORTANTE: Interpreta a este personaje con coherencia total a su personalidad y
   // PARSEO DE ETIQUETAS — 10 etiquetas reconocidas
   // ═══════════════════════════════════════════════════════
   function parseDmTags(text) {
-    let totalXP = 0, hpDelta = 0, enemyHpDelta = 0, rollAttr = null, diaryEntry = null;
+    let totalXP = 0, hpDelta = 0, enemyHpDelta = 0, rollAttr = null, diaryEntry = null, imagePrompt = null;
     let enemyCardData = null, enemyDefeated = false, npcCardId = null, npcName = null, setLocation = null, endConversation = false, combatEnded = false, compressedDiary = null;
     const worldUpdates = [];
     const itemsToAdd = [], itemsToRemove = [];
@@ -2325,7 +2056,7 @@ IMPORTANTE: Interpreta a este personaje con coherencia total a su personalidad y
     const cleaned = text
       .replace(/\[GAIN_XP:\s*(\d+)\s*\]/gi, (_, n) => {
         const v = parseInt(n, 10);
-        if (v >= 1 && v <= 999 && totalXP === 0) totalXP = v; // solo la primera etiqueta, cap preventivo
+        if (v >= 1 && v <= 50000) totalXP += v;
         return '';
       })
       .replace(/\[LOSE_HP:\s*(\d+)\s*\]/gi, (_, n) => {
@@ -2353,10 +2084,8 @@ IMPORTANTE: Interpreta a este personaje con coherencia total a su personalidad y
       .replace(/\[REMOVE_ITEM:\s*([^\]]+)\]/gi, (_, name) => {
         const n = name.trim(); if (n) itemsToRemove.push(n); return '';
       })
-      .replace(/\[ADD_QUEST:\s*([^|\]]+)(?:\|([^\]]*))?\]/gi, (_, title, desc) => {
-        const t = title.trim();
-        if (t) questsToAdd.push({ title: t, description: (desc || '').trim() });
-        return '';
+      .replace(/\[ADD_QUEST:\s*([^\]]+)\]/gi, (_, title) => {
+        const t = title.trim(); if (t) questsToAdd.push(t); return '';
       })
       .replace(/\[COMPLETE_QUEST:\s*([^\]]+)\]/gi, (_, title) => {
         const t = title.trim(); if (t) questsToComplete.push(t); return '';
@@ -2365,11 +2094,16 @@ IMPORTANTE: Interpreta a este personaje con coherencia total a su personalidad y
         const e = entry.trim(); if (e && !diaryEntry) diaryEntry = e;
         return '';
       })
-      .replace(/\[GENERATE_IMAGE:\s*([^\]]+)\]/gi, () => '')
-      .replace(/\[ENEMY_CARD:\s*([^|\]]+)\|?([^\]]*)\]/gi, (_, prompt, name) => {
+      .replace(/\[GENERATE_IMAGE:\s*([^\]]+)\]/gi, (_, prompt) => {
+        const p = prompt.trim().replace(/\s+/g, '-').toLowerCase();
+        if (p && !imagePrompt) imagePrompt = p;
+        return '';
+      })
+      .replace(/\[ENEMY_CARD:\s*([^|\]]+)\|?([^|\]]*)\|?([^\]]*)\]/gi, (_, prompt, name, countStr) => {
         if (!enemyCardData) enemyCardData = {
           prompt: prompt.trim().replace(/\s+/g, '-').toLowerCase(),
           name:   (name.trim() || 'Enemigo'),
+          count:  Math.max(1, Math.min(3, parseInt(countStr.trim()) || 1)),
         };
         return '';
       })
@@ -2412,31 +2146,10 @@ IMPORTANTE: Interpreta a este personaje con coherencia total a su personalidad y
       })
       .trim();
 
-    // ── Validación contextual de XP ──────────────────────
-    // XP solo es válido si hay un evento concreto que lo justifique.
-    let xpSource = null;
-    if (totalXP > 0) {
-      const hasCombat = enemyDefeated;
-      const hasQuest  = questsToComplete.length > 0;
-      if (hasCombat && hasQuest) {
-        xpSource = 'combate + misión';
-        totalXP  = Math.min(300, totalXP);
-      } else if (hasCombat) {
-        xpSource = 'combate';
-        totalXP  = Math.min(150, totalXP);
-      } else if (hasQuest) {
-        xpSource = 'misión completada';
-        totalXP  = Math.min(200, totalXP);
-      } else {
-        // Sin evento verificable → se descarta para evitar XP en conversaciones
-        totalXP = 0;
-      }
-    }
-
-    return { cleaned, totalXP, xpSource, hpDelta, enemyHpDelta, rollAttr, diaryEntry, enemyCardData, enemyDefeated, npcCardId, npcName, setLocation, worldUpdates, endConversation, combatEnded, compressedDiary, npcMemos, locationMemos, moralNotes, itemsToAdd, itemsToRemove, questsToAdd, questsToComplete };
+    return { cleaned, totalXP, hpDelta, enemyHpDelta, rollAttr, diaryEntry, imagePrompt, enemyCardData, enemyDefeated, npcCardId, npcName, setLocation, worldUpdates, endConversation, combatEnded, compressedDiary, npcMemos, locationMemos, moralNotes, itemsToAdd, itemsToRemove, questsToAdd, questsToComplete };
   }
 
-  function applyXpGain(amount, source) {
+  function applyXpGain(amount) {
     if (amount <= 0) return;
     const xpEl = $('xp-current');
     if (!xpEl) return;
@@ -2446,8 +2159,7 @@ IMPORTANTE: Interpreta a este personaje con coherencia total a su personalidad y
     lsSave('rpg_xp-current', String(newXP));
     updateXpBar();
     checkLevelUp(prevXP, newXP);
-    const srcLabel = source ? ` · ${source}` : '';
-    addSystemMessage(`✨ +${amount.toLocaleString('es')} XP${srcLabel} — Total: ${newXP.toLocaleString('es')} XP`);
+    addSystemMessage(`✨ +${amount.toLocaleString('es')} XP — Total: ${newXP.toLocaleString('es')} XP`);
   }
 
   function applyHpChange(delta) {
@@ -2488,9 +2200,11 @@ IMPORTANTE: Interpreta a este personaje con coherencia total a su personalidad y
     if (!isOoc) state.history.push({ role: 'user', content: userMessage });
 
     const loreText   = worldLore.value.trim() || 'Mundo de fantasía estándar medieval oscuro.';
+    const _dmName    = $('char-name').value.trim() || state.charName || 'el aventurero';
+    const _dmCls     = $('char-class').value.trim() || state.charClass || 'aventurero';
     const systemText = isOoc
       ? `ATENCIÓN — MODO DESARROLLADOR ACTIVO: Sal por completo de tu rol de Dungeon Master. No narres, no pidas tiradas de dados, no uses ninguna etiqueta del sistema de juego ([GAIN_XP], [LOSE_HP], [GAIN_HP], [REQUEST_ROLL], [ADD_ITEM], [REMOVE_ITEM], [ADD_QUEST], [COMPLETE_QUEST]). Responde de forma directa, técnica y transparente como una IA asistente respondiendo al desarrollador. Sé conciso y claro. El idioma de tu respuesta debe coincidir con el del mensaje que recibes.`
-      : `${buildDmCore()}\n\n=== INSTRUCCIONES DEL MUNDO / LORE ===\n${loreText}\n\n${buildCharBlock()}\n\n=== CHECKLIST ANTES DE ENVIAR ===\n1. ¿Incluiste [GAIN_XP]? → Solo es válido si TAMBIÉN incluiste [ENEMY_DEFEATED] o [COMPLETE_QUEST:] en este turno. Sin esas etiquetas el XP se descarta. Si no hay victoria concreta, elimina [GAIN_XP].\n2. ¿Incluiste [ADD_QUEST]? → Revisa las "Misiones activas". Si ya existe una misión con el mismo objetivo, no la repitas.\n3. ¿Incluiste [UPDATE_DIARY]? → Es obligatorio en primera visita a un lugar, derrota de enemigo con nombre, objeto clave u NPC nuevo.`;
+      : `${buildDmCore(_dmName, _dmCls)}\n\n=== INSTRUCCIONES DEL MUNDO / LORE ===\n${loreText}\n\n${buildCharBlock()}\n\n=== RECORDATORIO FINAL ANTES DE RESPONDER ===\nAntes de cerrar tu respuesta, comprueba: ¿has incluido [GAIN_XP]? Solo es válido si en este turno el jugador ha derrotado un enemigo o cerrado un hito narrativo. Si tu narración no describe esa victoria, elimina la etiqueta. La coherencia entre texto y etiquetas es obligatoria.`;
 
     setDmState('thinking');
     const dmBody = createDmStreamMessage();
@@ -2513,17 +2227,21 @@ IMPORTANTE: Interpreta a este personaje con coherencia total a su personalidad y
       // Modo normal: parsear etiquetas y aplicar mecánicas
       const {
         cleaned: displayText,
-        totalXP, xpSource, hpDelta, enemyHpDelta, rollAttr, diaryEntry,
+        totalXP, hpDelta, enemyHpDelta, rollAttr, diaryEntry, imagePrompt,
         enemyCardData, enemyDefeated, npcCardId, npcName, setLocation, worldUpdates, endConversation, combatEnded, compressedDiary,
         npcMemos, locationMemos, moralNotes,
         itemsToAdd, itemsToRemove,
         questsToAdd, questsToComplete,
       } = parseDmTags(fullText);
 
-      typeWriterEffect(dmBody, mdToHtml(displayText));
+      // El streaming ya mostró el texto char-a-char; solo aplicar HTML formateado
+      if (_completeTypewriter) { _completeTypewriter(); }
+      const finalHtml = mdToHtml(displayText);
+      dmBody.innerHTML = finalHtml;
+      scrollBottom();
 
       state.history.push({ role: 'assistant', content: displayText });
-      state.chatLog.push({ type: 'dm', html: mdToHtml(displayText) });
+      state.chatLog.push({ type: 'dm', html: finalHtml });
 
       // Añadir entrada al Diario de Campaña si la IA detectó un evento importante
       if (diaryEntry) {
@@ -2554,7 +2272,7 @@ IMPORTANTE: Interpreta a este personaje con coherencia total a su personalidad y
 
       console.log(`✓ ${modelUsed}`);
 
-      if (totalXP > 0)   applyXpGain(totalXP, xpSource);
+      if (totalXP > 0)   applyXpGain(totalXP);
       if (hpDelta !== 0) applyHpChange(hpDelta);
       if (rollAttr)      activatePendingRoll(rollAttr);
 
@@ -2574,7 +2292,7 @@ IMPORTANTE: Interpreta a este personaje con coherencia total a su personalidad y
       if (setLocation) _setCurrentLocation(setLocation.toLowerCase().trim(), setLocation.trim());
 
       // Tarjeta de enemigo/NPC
-      if (enemyCardData)   showEnemyCard(enemyCardData.prompt, enemyCardData.name);
+      if (enemyCardData)   showEnemyCard(enemyCardData.prompt, enemyCardData.name, enemyCardData.count || 1);
       if (enemyDefeated)   defeatEnemy();
       if (combatEnded)     endCombat();
       if (npcCardId)       showNpcCard(npcCardId);
@@ -2592,6 +2310,9 @@ IMPORTANTE: Interpreta a este personaje con coherencia total a su personalidad y
           if (rName) rName.textContent = npcName.nombre;
         }
       }
+
+      // Imagen en el chat (entornos, objetos, NPCs no combativos)
+      if (imagePrompt) renderChatImage(imagePrompt);
 
       return { text: displayText, modelUsed };
 
@@ -2683,16 +2404,6 @@ IMPORTANTE: Interpreta a este personaje con coherencia total a su personalidad y
   // ═══════════════════════════════════════════════════════
   // PERSISTENCIA DE CAMPOS
   // ═══════════════════════════════════════════════════════
-  function debounce(fn, ms) {
-    let timer;
-    return (...args) => { clearTimeout(timer); timer = setTimeout(() => fn(...args), ms); };
-  }
-
-  function lsSave(key, value) {
-    try { localStorage.setItem(key, value); }
-    catch { console.warn(`localStorage lleno: "${key}" no guardado.`); }
-  }
-
   const PERSIST_IDS = [
     'char-name', 'char-class', 'char-level',
     'hp-current', 'hp-max',
@@ -3000,20 +2711,16 @@ IMPORTANTE: Interpreta a este personaje con coherencia total a su personalidad y
         charName:  $('char-name')?.value  || '',
         charClass: $('char-class')?.value || '',
         fields: {},
-        chatLog:         state.chatLog,
-        history:         state.history,
-        inventory:       state.inventory,
-        quests:          state.quests,
-        pendingRoll:     state.pendingRoll,
-        campaignDiary:   state.campaignDiary,
-        npcLog:          state.npcLog,
-        locationLog:     state.locationLog,
-        moralLog:        state.moralLog,
-        playerStats:     state.playerStats,
-        npcNames:        state.npcNames,
-        currentLocation: state.currentLocation,
-        worldState:      state.worldState,
-        equipment:       state.equipment,
+        chatLog:       state.chatLog,
+        history:       state.history,
+        inventory:     state.inventory,
+        quests:        state.quests,
+        pendingRoll:   state.pendingRoll,
+        campaignDiary: state.campaignDiary,
+        npcLog:        state.npcLog,
+        locationLog:   state.locationLog,
+        moralLog:      state.moralLog,
+        playerStats:   state.playerStats,
       };
       PERSIST_IDS.forEach(id => {
         const el = $(id); if (el) gameState.fields[id] = el.value;
@@ -3054,27 +2761,23 @@ IMPORTANTE: Interpreta a este personaje con coherencia total a su personalidad y
             const el = $(id); if (el) el.value = val;
           });
 
-          state.chatLog         = data.chatLog         || [];
-          state.history         = data.history         || [];
-          state.inventory       = data.inventory       || [];
-          state.quests          = data.quests          || [];
-          state.pendingRoll     = data.pendingRoll     || null;
-          state.charName        = data.charName        || '';
-          state.charClass       = data.charClass       || '';
-          state.campaignDiary   = data.campaignDiary   || '';
-          state.npcLog          = data.npcLog          || {};
-          state.locationLog     = data.locationLog     || {};
-          state.moralLog        = data.moralLog        || [];
-          state.playerStats     = data.playerStats     || { str:0, dex:0, con:0, int:0, wis:0, cha:0 };
-          state.npcNames        = data.npcNames        || {};
-          state.currentLocation = data.currentLocation || null;
-          state.worldState      = data.worldState      || {};
-          state.equipment       = data.equipment       || { arma: null, armadura: null, accesorio: null };
+          state.chatLog       = data.chatLog       || [];
+          state.history       = data.history       || [];
+          state.inventory     = data.inventory     || [];
+          state.quests        = data.quests        || [];
+          state.pendingRoll   = data.pendingRoll   || null;
+          state.charName      = data.charName      || '';
+          state.charClass     = data.charClass     || '';
+          state.campaignDiary = data.campaignDiary || '';
+          state.npcLog        = data.npcLog        || {};
+          state.locationLog   = data.locationLog   || {};
+          state.moralLog      = data.moralLog      || [];
+          state.playerStats   = data.playerStats   || { str:0, dex:0, con:0, int:0, wis:0, cha:0 };
           saveChatLog(); saveGameState();
 
           lockCharFields();
           renderChatLog(state.chatLog);
-          renderInventory(); renderEquipment(); syncInventoryTextarea();
+          renderInventory(); syncInventoryTextarea();
           renderQuests();
           if (state.pendingRoll) activatePendingRoll(state.pendingRoll.label);
           syncStatDisplays(); // Recalcular stats desde clase + puntos ASI importados
