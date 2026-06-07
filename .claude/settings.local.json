@@ -6,7 +6,8 @@
       "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\77190035B\\\\Desktop\\\\Ismael\\\\dev\\\\DD\" -Recurse -File)",
       "Bash(Select-Object FullName, Extension, Length)",
       "Bash(Sort-Object FullName)",
-      "Bash(grep -E \"\\\\.\\(html|js|css|json|png|svg\\)$\")"
+      "Bash(grep -E \"\\\\.\\(html|js|css|json|png|svg\\)$\")",
+      "Bash(git merge *)"
     ]
   }
 }
