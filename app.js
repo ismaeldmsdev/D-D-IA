@@ -572,6 +572,21 @@ document.addEventListener('DOMContentLoaded', () => {
   diceRollBtn?.addEventListener('click', triggerDiceRoll);
   $('battle-panel-close')?.addEventListener('click', () => endCombat());
 
+  // ─ Enemy detail modal ───────────────────────────────
+  $('enemy-stack-wrapper')?.addEventListener('click', e => {
+    if (!state.activeEnemy) return;
+    const ignored = ['battle-panel-close', 'enemy-detail-close'];
+    if (ignored.includes(e.target?.id)) return;
+    openEnemyDetailModal();
+  });
+  $('enemy-detail-close')?.addEventListener('click', closeEnemyDetailModal);
+  $('enemy-detail-overlay')?.addEventListener('click', e => {
+    if (e.target.id === 'enemy-detail-overlay') closeEnemyDetailModal();
+  });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && $('enemy-detail-overlay')?.classList.contains('visible')) closeEnemyDetailModal();
+  });
+
   // ═══════════════════════════════════════════════════════
   // INVENTARIO DINÁMICO
   // ═══════════════════════════════════════════════════════
@@ -1426,6 +1441,7 @@ document.addEventListener('DOMContentLoaded', () => {
     lsSave('rpg_active_enemy', JSON.stringify(state.activeEnemy));
 
     updateEntityUI('enemy', { name, img: imgUrl, hpMax, count: n }, true);
+    $('enemy-stack-wrapper')?.classList.add('has-active');
     vibe([20, 15, 50]);
   }
 
@@ -1450,6 +1466,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const defeatedName = state.activeEnemy?.name || 'enemigo';
     const remaining    = (state.activeEnemy?.count || 1) - 1;
 
+    closeEnemyDetailModal();
     logProgress(`Derrotó a ${defeatedName}.`, 'victoria');
     overlay?.classList.add('visible');
     sfx.result(false);
@@ -1481,6 +1498,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
           state.activeEnemy = null;
           localStorage.removeItem('rpg_active_enemy');
+          $('enemy-stack-wrapper')?.classList.remove('has-active');
           _updateEnemyStack(1);
           updateEntityUI('enemy', null, false);
         }
@@ -1494,6 +1512,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const card    = $('enemy-card');
     const imgEl   = $('enemy-avatar-img');
     const overlay = $('death-overlay');
+    closeEnemyDetailModal();
+    $('enemy-stack-wrapper')?.classList.remove('has-active');
     state.activeEnemy = null;
     localStorage.removeItem('rpg_active_enemy');
     _updateEnemyStack(1);
@@ -1512,6 +1532,60 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
   window.endCombat = endCombat;
+
+  // ─ Ficha de Enemigo — Modal de detalles ─────────────
+  function _buildEnemyStatBlock(e, index, isCurrent) {
+    const hp  = isCurrent ? e.hpCurrent : e.hpMax;
+    const pct = Math.round((hp / e.hpMax) * 100);
+    const label = e.count > 1
+      ? `<div class="enemy-stat-count">${isCurrent ? '⚔ EN COMBATE' : `EN ESPERA · #${index + 1}`}</div>`
+      : '';
+    return `
+      <div class="enemy-stat-block${isCurrent ? ' enemy-stat-active' : ' enemy-stat-waiting'}">
+        <img class="enemy-stat-img" src="${escHtml(e.img)}" alt="${escHtml(e.name)}"
+             onerror="this.src='img/enemigos/goblin-1.png'">
+        <div class="enemy-stat-name">${escHtml(e.name)}</div>
+        ${label}
+        <div class="enemy-stat-hp-row">
+          <span class="enemy-stat-hp-label">Puntos de Vida</span>
+          <div class="enemy-stat-hp-bar-wrap">
+            <div class="enemy-stat-hp-bar" style="width:${pct}%"></div>
+          </div>
+          <div class="enemy-stat-hp-text">${hp} / ${e.hpMax}</div>
+        </div>
+        <div class="enemy-stat-grid">
+          ${e.ca   ? `<div class="enemy-stat-cell"><span class="enemy-stat-label">Armadura (CA)</span><span class="enemy-stat-value">🛡 ${e.ca}</span></div>` : ''}
+          ${e.dano ? `<div class="enemy-stat-cell"><span class="enemy-stat-label">Daño por Ataque</span><span class="enemy-stat-value">⚔ ${e.dano}</span></div>` : ''}
+        </div>
+      </div>`;
+  }
+
+  function openEnemyDetailModal() {
+    const e       = state.activeEnemy;
+    const overlay = $('enemy-detail-overlay');
+    const body    = $('enemy-detail-body');
+    if (!e || !overlay || !body) return;
+
+    const count = e.count || 1;
+    let html = '';
+    for (let i = 0; i < count; i++) {
+      html += _buildEnemyStatBlock(e, i, i === 0);
+    }
+    body.innerHTML = html;
+
+    overlay.classList.add('visible');
+    overlay.setAttribute('aria-hidden', 'false');
+  }
+
+  function closeEnemyDetailModal() {
+    const overlay = $('enemy-detail-overlay');
+    if (!overlay) return;
+    overlay.classList.remove('visible');
+    overlay.setAttribute('aria-hidden', 'true');
+  }
+
+  window.openEnemyDetailModal  = openEnemyDetailModal;
+  window.closeEnemyDetailModal = closeEnemyDetailModal;
 
   // ─ NPCs ─────────────────────────────────────────────
   function showNpcCard(id) {
@@ -2883,6 +2957,8 @@ IMPORTANTE: Interpreta a este personaje con coherencia total a su personalidad y
             updateHealth('enemy', enemy.hpCurrent, enemy.hpMax);
             if (state.activeEnemy) state.activeEnemy.hpCurrent = enemy.hpCurrent;
           }
+          _updateEnemyStack(enemy.count || 1);
+          $('enemy-stack-wrapper')?.classList.add('has-active');
         }
       } else {
         const savedNpc = localStorage.getItem('rpg_active_npc');

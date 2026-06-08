@@ -793,52 +793,71 @@ body.theme-parchment .dm-continue-btn {
   color: #6a3e08;
 }
 
-/* ── DM message — borde izquierdo dorado sagrado ── */
+/* ── DM message — Narrador del Abismo (tomo de campaña) ── */
 .dm-message .msg-avatar {
-  background: radial-gradient(circle at 40% 35%, rgba(28,22,50,0.95), rgba(10,8,22,0.98));
-  border-color: var(--border-gold);
-  color: var(--gold-mid);
-  box-shadow: 0 0 14px rgba(200,160,32,0.18), inset 0 0 8px rgba(200,160,32,0.05);
+  display: none; /* Sin avatar: el texto ocupa todo el ancho */
 }
 
 .dm-message .msg-body {
-  /* Pergamino con luz de antorcha desde la esquina superior izquierda */
   background:
-    radial-gradient(ellipse 65% 55% at 12% 20%, rgba(90, 55, 10, 0.2) 0%, transparent 65%),
-    radial-gradient(ellipse 40% 40% at 85% 85%, rgba(60, 30, 8, 0.1) 0%, transparent 60%),
-    linear-gradient(145deg, rgba(22, 16, 40, 0.92) 0%, rgba(10, 8, 22, 0.97) 100%);
-  border: 1px solid rgba(120, 90, 24, 0.35);
-  border-left: none; /* El borde izquierdo lo hace ::before con degradado */
+    radial-gradient(ellipse 55% 38% at 8% 18%, rgba(105, 62, 8, 0.15) 0%, transparent 55%),
+    radial-gradient(ellipse 32% 28% at 90% 88%, rgba(70, 38, 6, 0.1) 0%, transparent 50%),
+    linear-gradient(158deg, rgba(21, 15, 7, 0.96) 0%, rgba(11, 8, 4, 0.99) 100%);
+  border: 1px solid rgba(126, 88, 18, 0.22);
+  border-top: none; /* El tope lo cubre ::before */
   color: var(--text-dm);
-  box-shadow:
-    0 4px 28px rgba(0,0,0,0.75),
-    -4px 0 24px rgba(200,160,32,0.06),
-    inset 0 1px 0 rgba(200,160,32,0.07),
-    inset 0 0 40px rgba(90,55,10,0.06);
+  border-radius: var(--radius-lg);
+  padding: 20px 26px 18px 24px;
   position: relative;
-  padding-left: 19px; /* Compensa el pseudo-borde izquierdo */
+  font-size: 1.02rem;
+  line-height: 1.92;
+  letter-spacing: 0.012em;
+  box-shadow:
+    0 5px 36px rgba(0,0,0,0.62),
+    inset 0 0 55px rgba(90, 52, 6, 0.04);
 }
 
-/* Borde izquierdo degradado — antorcha que se apaga hacia abajo */
+/* Línea dorada superior — encabezado de capítulo */
 .dm-message .msg-body::before {
   content: '';
   position: absolute;
-  top: 0; left: 0;
-  width: 3px; height: 100%;
-  background: linear-gradient(180deg,
-    var(--gold-bright) 0%,
-    var(--gold-mid)    30%,
-    var(--gold-dim)    65%,
-    transparent        100%
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg,
+    transparent      0%,
+    var(--gold-dim)  10%,
+    var(--gold-bright) 38%,
+    var(--gold-mid)  66%,
+    var(--gold-dim)  84%,
+    transparent      100%
   );
-  border-radius: 3px 0 0 var(--radius-lg);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
 }
 
-/* Palabras en negrita dentro del texto del DM → dorado brillante (XP, nombres, eventos) */
+/* Ornamento rúnico en esquina — marca de narrador */
+.dm-message .msg-body::after {
+  content: '✦';
+  position: absolute;
+  top: 9px; right: 16px;
+  font-size: 0.5rem;
+  color: rgba(200, 160, 32, 0.2);
+  pointer-events: none;
+}
+
+/* Separación entre párrafos más generosa */
+.dm-message .msg-body p + p { margin-top: 14px; }
+
+/* Negrita = nombres propios, eventos, énfasis — dorado brillante */
 .dm-message .msg-body strong {
   color: var(--gold-bright);
-  text-shadow: 0 0 8px rgba(200, 160, 32, 0.35);
+  text-shadow: 0 0 10px rgba(200, 160, 32, 0.28);
   font-weight: 700;
+}
+
+/* Cursiva = texto atmosférico, susurros, acciones — ámbar cálido */
+.dm-message .msg-body em {
+  color: rgba(215, 175, 95, 0.88);
+  font-style: italic;
 }
 
 /* ── Player message — borde derecho azul rúnico ── */
@@ -1959,6 +1978,7 @@ kbd {
   .chat-messages { padding: 14px 12px; gap: 14px; }
   .msg-avatar    { width: 30px; height: 30px; font-size: 0.56rem; }
   .msg-body      { padding: 10px 12px; font-size: 0.95rem; line-height: 1.7; }
+  .dm-message .msg-body { padding: 16px 18px 14px; font-size: 0.97rem; line-height: 1.85; letter-spacing: 0.01em; }
 
   /* Input */
   .chat-input-area { padding: 10px 12px; }
@@ -3641,17 +3661,22 @@ body.theme-parchment .chat-messages {
 
 body.theme-parchment .dm-message .msg-body {
   background:
-    radial-gradient(ellipse 65% 55% at 12% 20%, rgba(160,110,30,0.15) 0%, transparent 65%),
-    linear-gradient(145deg, rgba(240,228,200,0.95) 0%, rgba(228,212,180,0.97) 100%);
-  border-color: rgba(140,100,40,0.4);
-  color: var(--text-dm);
+    radial-gradient(ellipse 55% 40% at 8% 18%, rgba(160,110,30,0.12) 0%, transparent 55%),
+    linear-gradient(155deg, rgba(242,230,202,0.96) 0%, rgba(228,212,178,0.98) 100%);
+  border-color: rgba(140,100,40,0.35);
+  color: #3a2808;
 }
 
 body.theme-parchment .dm-message .msg-body::before {
-  background: linear-gradient(180deg, var(--gold-mid) 0%, var(--gold-dim) 60%, transparent 100%);
+  background: linear-gradient(90deg,
+    transparent 0%, rgba(140,100,30,0.6) 12%,
+    var(--gold-mid) 40%, rgba(140,100,30,0.5) 80%, transparent 100%
+  );
 }
 
-body.theme-parchment .dm-message .msg-body strong { color: var(--gold-mid); }
+body.theme-parchment .dm-message .msg-body::after { color: rgba(140,90,20,0.22); }
+body.theme-parchment .dm-message .msg-body strong { color: #6a3c08; text-shadow: none; }
+body.theme-parchment .dm-message .msg-body em { color: rgba(100,60,10,0.8); }
 
 body.theme-parchment .player-message .msg-body {
   background: linear-gradient(138deg, rgba(200,210,240,0.7) 0%, rgba(190,200,230,0.8) 100%);
@@ -3979,9 +4004,7 @@ body.theme-parchment .chat-image {
 }
 
 /* Player card — primer hijo del panel (izquierda en flex) */
-.player-card {
-  /* sin overrides de posición — battle-panel + flex lo gestiona */
-}
+.player-card { flex-shrink: 0; }
 
 .player-card.active {
   opacity: 1;
@@ -3990,9 +4013,7 @@ body.theme-parchment .chat-image {
 }
 
 /* Enemy/NPC card — segundo hijo del panel (derecha en flex) */
-.enemy-card-right {
-  /* sin overrides de posición */
-}
+.enemy-card-right { flex-shrink: 0; }
 
 /* ── Activo — animación de entrada ── */
 .enemy-card-right.active {
@@ -4390,6 +4411,219 @@ body.theme-parchment .hp-container {
   .enemy-stack-ghost.ghost-1 { transform: translate(3px, 3px); }
   .enemy-stack-ghost.ghost-2 { transform: translate(6px, 6px); }
   .enemy-count-badge { font-size: 0.6rem; padding: 1px 5px 2px; top: -6px; right: -7px; }
+}
+
+/* ══════════════════════════════════════════════════════
+   MODAL FICHA DE ENEMIGO EN COMBATE
+   ══════════════════════════════════════════════════ */
+.enemy-detail-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(3, 2, 9, 0.92);
+  backdrop-filter: blur(10px);
+  z-index: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+  padding: 16px;
+}
+.enemy-detail-overlay.visible {
+  opacity: 1;
+  pointer-events: all;
+}
+.enemy-detail-card {
+  background: linear-gradient(148deg,
+    rgba(30, 8, 8, 0.99) 0%,
+    rgba(12, 4, 4, 0.99) 100%
+  );
+  border: 1px solid rgba(220, 50, 50, 0.35);
+  border-radius: 14px;
+  padding: 24px 20px 20px;
+  max-width: 380px;
+  width: 100%;
+  max-height: 80vh;
+  overflow-y: auto;
+  box-shadow:
+    0 0 40px rgba(200, 30, 30, 0.2),
+    0 20px 60px rgba(0,0,0,0.95);
+  position: relative;
+  animation: modalIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.enemy-detail-close {
+  position: absolute;
+  top: 10px; right: 12px;
+  background: none;
+  border: none;
+  color: rgba(220, 80, 80, 0.6);
+  font-size: 1rem;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: color 0.2s, background 0.2s;
+  line-height: 1;
+}
+.enemy-detail-close:hover { color: #fff; background: rgba(220,50,50,0.2); }
+.enemy-detail-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 16px;
+  padding-right: 20px;
+}
+.enemy-detail-title {
+  font-family: var(--font-title);
+  font-size: 0.9rem;
+  letter-spacing: 0.2em;
+  color: var(--gold-bright);
+  text-transform: uppercase;
+  margin: 0;
+}
+.enemy-detail-ornament { color: rgba(220, 60, 60, 0.8); font-size: 0.85rem; }
+
+.enemy-stat-block {
+  background: rgba(220, 50, 50, 0.04);
+  border: 1px solid rgba(220, 50, 50, 0.18);
+  border-radius: 10px;
+  padding: 16px 14px 14px;
+  margin-bottom: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+.enemy-stat-block:last-child { margin-bottom: 0; }
+.enemy-stat-img {
+  width: 76px; height: 76px;
+  object-fit: cover;
+  border-radius: 50%;
+  border: 2px solid rgba(220, 50, 50, 0.4);
+  filter: drop-shadow(0 0 12px rgba(220, 30, 30, 0.4));
+}
+.enemy-stat-name {
+  font-family: var(--font-title);
+  font-size: 1rem;
+  color: var(--gold-bright);
+  letter-spacing: 0.1em;
+  text-align: center;
+}
+.enemy-stat-count {
+  font-size: 0.75rem;
+  color: rgba(235, 80, 80, 0.95);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  background: rgba(220, 50, 50, 0.14);
+  padding: 3px 12px;
+  border-radius: 20px;
+  border: 1px solid rgba(220, 50, 50, 0.3);
+}
+.enemy-stat-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  width: 100%;
+}
+.enemy-stat-cell {
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 8px;
+  padding: 9px 10px 8px;
+  text-align: center;
+  border: 1px solid rgba(255,255,255,0.04);
+}
+.enemy-stat-label {
+  font-size: 0.6rem;
+  color: var(--text-muted);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  margin-bottom: 3px;
+  display: block;
+}
+.enemy-stat-value {
+  font-family: var(--font-title);
+  font-size: 1.05rem;
+  color: #fff;
+  display: block;
+}
+.enemy-stat-hp-row {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.enemy-stat-hp-label {
+  font-size: 0.6rem;
+  color: var(--text-muted);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  text-align: center;
+  display: block;
+}
+.enemy-stat-hp-bar-wrap {
+  width: 100%;
+  background: rgba(0,0,0,0.45);
+  border-radius: 4px;
+  height: 7px;
+  overflow: hidden;
+}
+.enemy-stat-hp-bar {
+  height: 100%;
+  border-radius: 4px;
+  background: linear-gradient(90deg, #9b1c1c, #e83535);
+  transition: width 0.4s ease;
+}
+.enemy-stat-hp-text {
+  text-align: center;
+  font-size: 0.82rem;
+  color: rgba(255,255,255,0.75);
+  font-family: var(--font-title);
+  letter-spacing: 0.06em;
+}
+
+/* Enemigo activo (el que está en combate) — más destacado */
+.enemy-stat-active {
+  border-color: rgba(220, 50, 50, 0.35);
+  background: rgba(220, 50, 50, 0.06);
+}
+.enemy-stat-active .enemy-stat-count {
+  color: rgba(255, 90, 70, 1);
+  background: rgba(220, 50, 50, 0.2);
+  border-color: rgba(220, 50, 50, 0.45);
+}
+
+/* Enemigos en espera — más apagados */
+.enemy-stat-waiting {
+  opacity: 0.65;
+  border-color: rgba(140, 100, 20, 0.18);
+  background: rgba(140, 100, 20, 0.04);
+}
+.enemy-stat-waiting .enemy-stat-count {
+  color: rgba(160, 130, 60, 0.85);
+  background: rgba(140, 100, 20, 0.12);
+  border-color: rgba(140, 100, 20, 0.25);
+}
+.enemy-stat-waiting .enemy-stat-hp-bar {
+  background: linear-gradient(90deg, #5a4010, #8a6818);
+}
+.enemy-stat-waiting .enemy-stat-img {
+  filter: drop-shadow(0 0 6px rgba(140,100,20,0.25)) brightness(0.8);
+  border-color: rgba(140, 100, 20, 0.3);
+}
+
+/* Indicador visual de tarjeta interactiva */
+.enemy-stack-wrapper.has-active { cursor: pointer; }
+.enemy-stack-wrapper.has-active .enemy-card-header {
+  user-select: none;
+}
+.enemy-stack-wrapper.has-active .enemy-card-header::after {
+  content: ' ·VER·';
+  font-size: 0.48rem;
+  letter-spacing: 0.15em;
+  opacity: 0.45;
+  vertical-align: middle;
+  font-weight: 400;
 }
 
 /* ══════════════════════════════════════════════════════
