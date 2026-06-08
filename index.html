@@ -218,6 +218,14 @@
           <h3 class="section-label">🎒 Inventario</h3>
           <span class="inventory-count" id="inventory-count">0</span>
         </div>
+
+        <!-- Contador de Oro -->
+        <div class="gold-counter" id="gold-counter">
+          <span class="gold-coin-icon">🪙</span>
+          <span class="gold-label">Oro</span>
+          <span class="gold-amount" id="gold-amount">0</span>
+          <span class="gold-unit">mo</span>
+        </div>
         <!-- Slots de equipamiento activo -->
         <div class="equipment-slots" id="equipment-slots">
           <div class="equip-slot" data-slot="arma">
@@ -634,6 +642,10 @@
       <div class="debug-row">
         <input type="number" id="debug-hp-val" placeholder="HP" class="debug-input" />
         <button class="debug-btn" id="debug-hp-btn">+HP</button>
+      </div>
+      <div class="debug-row">
+        <input type="number" id="debug-gold-val" placeholder="Oro" min="1" class="debug-input" />
+        <button class="debug-btn" id="debug-gold-btn">+Oro</button>
       </div>
     </div>
   </div>

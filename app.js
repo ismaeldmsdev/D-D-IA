@@ -81,6 +81,7 @@ document.addEventListener('DOMContentLoaded', () => {
     currentLocation:   null, // { id, name } | null — última ubicación conocida del jugador
     worldState:        {},   // { [clave]: valor } — estado global del mundo (ciudades, facciones, NPCs clave)
     equipment:         { arma: null, armadura: null, accesorio: null }, // slots de equipamiento activo
+    gold:              0,   // monedas de oro del personaje
   };
 
   // ─────────────────────────────────────────────────────
@@ -786,6 +787,31 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // ═══════════════════════════════════════════════════════
+  // ORO
+  // ═══════════════════════════════════════════════════════
+  function renderGold() {
+    const el = $('gold-amount');
+    if (el) el.textContent = state.gold.toLocaleString('es');
+  }
+
+  function addGold(amount) {
+    if (amount <= 0) return;
+    state.gold += amount;
+    lsSave('rpg_gold', String(state.gold));
+    renderGold();
+    addSystemMessage(`💰 +${amount.toLocaleString('es')} monedas de oro — Total: ${state.gold.toLocaleString('es')} mo`);
+    logProgress(`Obtuvo ${amount} monedas de oro.`, 'objeto');
+  }
+
+  function removeGold(amount) {
+    if (amount <= 0) return;
+    state.gold = Math.max(0, state.gold - amount);
+    lsSave('rpg_gold', String(state.gold));
+    renderGold();
+    addSystemMessage(`💸 -${amount.toLocaleString('es')} monedas de oro — Quedan: ${state.gold.toLocaleString('es')} mo`);
+  }
+
+  // ═══════════════════════════════════════════════════════
   // DIARIO DE MISIONES
   // ═══════════════════════════════════════════════════════
   function renderQuests() {
@@ -1013,6 +1039,7 @@ document.addEventListener('DOMContentLoaded', () => {
       localStorage.setItem('rpg_world_state',      JSON.stringify(state.worldState));
       localStorage.setItem('rpg_equipment',         JSON.stringify(state.equipment));
       localStorage.setItem('rpg_puntos_disponibles', String(state.puntosDisponibles));
+      localStorage.setItem('rpg_gold', String(state.gold));
       if (state.pendingRoll) localStorage.setItem('rpg_pending_roll', JSON.stringify(state.pendingRoll));
       else                   localStorage.removeItem('rpg_pending_roll');
     } catch { console.warn('localStorage lleno — estado del juego no guardado.'); }
@@ -1055,6 +1082,7 @@ document.addEventListener('DOMContentLoaded', () => {
     try { state.equipment = JSON.parse(localStorage.getItem('rpg_equipment') || '{"arma":null,"armadura":null,"accesorio":null}'); }
     catch(e) { state.equipment = { arma: null, armadura: null, accesorio: null }; }
     state.puntosDisponibles = parseInt(localStorage.getItem('rpg_puntos_disponibles') || '0') || 0;
+    state.gold = parseInt(localStorage.getItem('rpg_gold') || '0') || 0;
     // Cargar puntos ASI — con migración automática desde saves antiguos
     try {
       const rawPS = localStorage.getItem('rpg_player_stats');
@@ -1890,6 +1918,11 @@ document.addEventListener('DOMContentLoaded', () => {
       const v = parseInt($('debug-hp-val')?.value) || 0;
       if (v !== 0) { applyHpChange(v); $('debug-hp-val').value = ''; }
     });
+
+    $('debug-gold-btn')?.addEventListener('click', () => {
+      const v = parseInt($('debug-gold-val')?.value) || 0;
+      if (v > 0) { addGold(v); $('debug-gold-val').value = ''; }
+    });
   }
 
   // ─ NPCs ─────────────────────────────────────────────
@@ -2428,7 +2461,7 @@ IMPORTANTE: Interpreta a este personaje con coherencia total a su personalidad y
   // PARSEO DE ETIQUETAS — 10 etiquetas reconocidas
   // ═══════════════════════════════════════════════════════
   function parseDmTags(text) {
-    let totalXP = 0, hpDelta = 0, enemyHpDelta = 0, rollAttr = null, diaryEntry = null, imagePrompt = null;
+    let totalXP = 0, hpDelta = 0, enemyHpDelta = 0, goldDelta = 0, rollAttr = null, diaryEntry = null, imagePrompt = null;
     const enemyCardList = []; let enemyDefeated = false, npcCardId = null, npcName = null, setLocation = null, endConversation = false, combatEnded = false, compressedDiary = null;
     const worldUpdates = [];
     const itemsToAdd = [], itemsToRemove = [];
@@ -2526,9 +2559,19 @@ IMPORTANTE: Interpreta a este personaje con coherencia total a su personalidad y
         const s = summary.trim(); if (s) compressedDiary = s;
         return '';
       })
+      .replace(/\[ADD_GOLD:\s*(\d+)\s*\]/gi, (_, n) => {
+        const v = parseInt(n, 10);
+        if (v >= 1) goldDelta += v;
+        return '';
+      })
+      .replace(/\[REMOVE_GOLD:\s*(\d+)\s*\]/gi, (_, n) => {
+        const v = parseInt(n, 10);
+        if (v >= 1) goldDelta -= v;
+        return '';
+      })
       .trim();
 
-    return { cleaned, totalXP, hpDelta, enemyHpDelta, rollAttr, diaryEntry, imagePrompt, enemyCardList, enemyDefeated, npcCardId, npcName, setLocation, worldUpdates, endConversation, combatEnded, compressedDiary, npcMemos, locationMemos, moralNotes, itemsToAdd, itemsToRemove, questsToAdd, questsToComplete };
+    return { cleaned, totalXP, hpDelta, enemyHpDelta, goldDelta, rollAttr, diaryEntry, imagePrompt, enemyCardList, enemyDefeated, npcCardId, npcName, setLocation, worldUpdates, endConversation, combatEnded, compressedDiary, npcMemos, locationMemos, moralNotes, itemsToAdd, itemsToRemove, questsToAdd, questsToComplete };
   }
 
   function applyXpGain(amount) {
@@ -2609,7 +2652,7 @@ IMPORTANTE: Interpreta a este personaje con coherencia total a su personalidad y
       // Modo normal: parsear etiquetas y aplicar mecánicas
       const {
         cleaned: displayText,
-        totalXP, hpDelta, enemyHpDelta, rollAttr, diaryEntry, imagePrompt,
+        totalXP, hpDelta, enemyHpDelta, goldDelta, rollAttr, diaryEntry, imagePrompt,
         enemyCardList, enemyDefeated, npcCardId, npcName, setLocation, worldUpdates, endConversation, combatEnded, compressedDiary,
         npcMemos, locationMemos, moralNotes,
         itemsToAdd, itemsToRemove,
@@ -2656,6 +2699,8 @@ IMPORTANTE: Interpreta a este personaje con coherencia total a su personalidad y
 
       if (totalXP > 0)   applyXpGain(totalXP);
       if (hpDelta !== 0) applyHpChange(hpDelta);
+      if (goldDelta > 0) addGold(goldDelta);
+      else if (goldDelta < 0) removeGold(-goldDelta);
       if (rollAttr)      activatePendingRoll(rollAttr);
 
       // Daño infligido al enemigo → actualizar barra de HP
@@ -2878,7 +2923,7 @@ IMPORTANTE: Interpreta a este personaje con coherencia total a su personalidad y
       if (_newPanel)  { _newPanel.classList.remove('active'); _newPanel.setAttribute('aria-hidden','true'); }
       _hideGameOverOverlay?.();
       saveChatLog(); saveGameState();
-      renderInventory(); renderEquipment(); renderQuests();
+      renderInventory(); renderEquipment(); renderQuests(); renderGold();
 
       addSystemMessage(`✦ ${name} el/la ${cls} comienza su aventura. ¡Que los dioses te acompañen!`);
     });
@@ -2980,7 +3025,7 @@ IMPORTANTE: Interpreta a este personaje con coherencia total a su personalidad y
       else el.value = '';
       if (id === 'char-name' || id === 'char-class') el.removeAttribute('readonly');
     });
-    renderInventory(); renderEquipment(); renderQuests();
+    renderInventory(); renderEquipment(); renderQuests(); renderGold();
     updateHpBar(); updateXpBar();
     ['str','dex','con','int','wis','cha'].forEach(updateMod);
     updateSkillBonuses(); setDmState('ready');
@@ -3035,7 +3080,7 @@ IMPORTANTE: Interpreta a este personaje con coherencia total a su personalidad y
         if (id === 'char-name' || id === 'char-class') el.removeAttribute('readonly');
       });
 
-      renderInventory(); renderEquipment(); renderQuests();
+      renderInventory(); renderEquipment(); renderQuests(); renderGold();
       updateHpBar(); updateXpBar();
       ['str', 'dex', 'con', 'int', 'wis', 'cha'].forEach(updateMod);
       updateSkillBonuses(); _syncModoASI(); setDmState('ready');
@@ -3160,7 +3205,7 @@ IMPORTANTE: Interpreta a este personaje con coherencia total a su personalidad y
           lockCharFields();
           renderChatLog(state.chatLog);
           renderInventory(); syncInventoryTextarea();
-          renderQuests();
+          renderQuests(); renderGold();
           if (state.pendingRoll) activatePendingRoll(state.pendingRoll.label);
           syncStatDisplays(); // Recalcular stats desde clase + puntos ASI importados
           updateHpBar(); updateXpBar(); updateStats();
@@ -3248,6 +3293,7 @@ IMPORTANTE: Interpreta a este personaje con coherencia total a su personalidad y
     renderInventory();
     syncInventoryTextarea();
     renderQuests();
+    renderGold();
 
     // Cargar historial de tiradas
     try { state.rollHistory = JSON.parse(localStorage.getItem('rpg_roll_history') || '[]'); } catch(e) { state.rollHistory = []; }

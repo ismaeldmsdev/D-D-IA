@@ -2416,6 +2416,63 @@ kbd {
   text-align: center;
 }
 
+/* ── Contador de Oro ── */
+.gold-counter {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 8px 0 10px;
+  padding: 7px 12px;
+  background: linear-gradient(135deg, rgba(30,20,4,0.92), rgba(16,11,2,0.97));
+  border: 1px solid var(--border-gold);
+  border-radius: var(--radius);
+  box-shadow: 0 0 12px rgba(200,160,32,0.08);
+}
+
+.gold-coin-icon {
+  font-size: 1rem;
+  line-height: 1;
+  filter: drop-shadow(0 0 4px rgba(240,192,48,0.5));
+}
+
+.gold-label {
+  font-family: var(--font-title);
+  font-size: 0.65rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--gold-dim);
+  flex: 1;
+}
+
+.gold-amount {
+  font-family: var(--font-mono);
+  font-size: 1rem;
+  font-weight: 700;
+  background: var(--gold-gradient);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: var(--gold-bright);
+}
+
+.gold-unit {
+  font-family: var(--font-title);
+  font-size: 0.62rem;
+  color: var(--gold-dim);
+  letter-spacing: 0.08em;
+}
+
+/* Parchment override */
+.theme-parchment .gold-counter {
+  background: linear-gradient(135deg, rgba(210,180,120,0.6), rgba(195,165,100,0.55));
+  border-color: rgba(140,100,20,0.6);
+}
+.theme-parchment .gold-amount {
+  background: linear-gradient(135deg, #7a4e10 0%, #c88020 50%, #7a4e10 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+
 .inventory-list {
   display: flex;
   flex-direction: column;

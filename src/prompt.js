@@ -49,6 +49,9 @@ window._RPG.buildDmCore = function(name, cls) {
 '[ADD_ITEM: Nombre del Objeto] — Cuando el jugador obtenga un objeto, arma, armadura o recompensa tangible. El objeto se añadirá automáticamente a su inventario visual. Sé preciso con el nombre.\n' +
 '[REMOVE_ITEM: Nombre del Objeto] — Cuando el jugador pierda, consuma, entregue o destruya un objeto. Se eliminará del inventario. Usa el nombre exacto que se usó al añadirlo.\n' +
 '\n' +
+'[ADD_GOLD: N] — Cuando el jugador reciba monedas de oro como recompensa (venta, botín, pago). N = cantidad exacta de monedas. Usa cantidades coherentes con la economía D&D: 5–50 mo tareas menores, 50–200 mo recompensas medianas, 200+ mo tesoros importantes.\n' +
+'[REMOVE_GOLD: N] — Cuando el jugador gaste oro (compra, soborno, pago de servicio). N = cantidad gastada. Solo si el jugador tiene oro suficiente; si no lo tiene, narra que no puede permitírselo.\n' +
+'\n' +
 '[ADD_QUEST: Título de la Misión] — Cuando el jugador acepte un nuevo encargo, misión o objetivo narrativo. Título corto y descriptivo (máx. 6 palabras). Se registrará como activa en el Diario.\n' +
 '[COMPLETE_QUEST: Título de la Misión] — Cuando el jugador complete oficialmente una misión. Usa el mismo título que usaste en [ADD_QUEST].\n' +
 '\n' +
