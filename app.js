@@ -1838,24 +1838,31 @@ document.addEventListener('DOMContentLoaded', () => {
   window.openPlayerStatsPanel  = openPlayerStatsPanel;
   window.closePlayerStatsPanel = closePlayerStatsPanel;
 
-  // ─ Panel debug oculto — 7 taps en el nivel ───────────
+  // ─ Panel debug oculto — 7 taps en el avatar de la ficha ─
   {
     let _tapCount = 0, _tapTimer = null;
-    $('char-level')?.addEventListener('click', () => {
-      _tapCount++;
-      clearTimeout(_tapTimer);
-      _tapTimer = setTimeout(() => { _tapCount = 0; }, 1800);
-      if (_tapCount >= 7) {
-        _tapCount = 0;
-        const p = $('debug-panel');
-        if (p) { p.classList.add('visible'); p.setAttribute('aria-hidden', 'false'); }
-      }
-    });
 
+    function _openDebug() {
+      const p = $('debug-panel');
+      if (!p) return;
+      p.style.display = 'flex';
+      p.setAttribute('aria-hidden', 'false');
+    }
     function _closeDebug() {
       const p = $('debug-panel');
-      if (p) { p.classList.remove('visible'); p.setAttribute('aria-hidden', 'true'); }
+      if (!p) return;
+      p.style.display = 'none';
+      p.setAttribute('aria-hidden', 'true');
     }
+
+    // pointerdown es fiable en móvil y escritorio; touchstart podría dar doble-disparo
+    $('char-sheet-avatar')?.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      _tapCount++;
+      clearTimeout(_tapTimer);
+      _tapTimer = setTimeout(() => { _tapCount = 0; }, 2500);
+      if (_tapCount >= 7) { _tapCount = 0; _openDebug(); }
+    });
 
     $('debug-close')?.addEventListener('click', _closeDebug);
     $('debug-panel')?.addEventListener('click', e => {
@@ -1874,7 +1881,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const needed = (XP_TABLE[target - 1] || 0) - (parseInt(xpEl.value) || 0);
         if (needed > 0) applyXpGain(needed);
       }
-      $('debug-lvl-val').value = '';
+      if ($('debug-lvl-val')) $('debug-lvl-val').value = '';
     });
 
     $('debug-hp-btn')?.addEventListener('click', () => {

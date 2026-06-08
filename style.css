@@ -4876,18 +4876,14 @@ body.theme-parchment .enemy-stat-img {
 
 /* ── Panel debug oculto ── */
 .debug-panel {
+  display: none;
   position: fixed;
   inset: 0;
   z-index: 9999;
-  display: flex;
   align-items: flex-end;
   justify-content: flex-end;
   padding: 24px 16px;
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity 0.2s ease;
 }
-.debug-panel.visible { opacity: 1; pointer-events: all; }
 .debug-panel-inner {
   background: rgba(10, 10, 18, 0.96);
   border: 1px solid rgba(255,255,255,0.1);
