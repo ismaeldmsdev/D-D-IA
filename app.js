@@ -1012,6 +1012,7 @@ document.addEventListener('DOMContentLoaded', () => {
       localStorage.setItem('rpg_current_location', JSON.stringify(state.currentLocation));
       localStorage.setItem('rpg_world_state',      JSON.stringify(state.worldState));
       localStorage.setItem('rpg_equipment',         JSON.stringify(state.equipment));
+      localStorage.setItem('rpg_puntos_disponibles', String(state.puntosDisponibles));
       if (state.pendingRoll) localStorage.setItem('rpg_pending_roll', JSON.stringify(state.pendingRoll));
       else                   localStorage.removeItem('rpg_pending_roll');
     } catch { console.warn('localStorage lleno — estado del juego no guardado.'); }
@@ -1053,6 +1054,7 @@ document.addEventListener('DOMContentLoaded', () => {
     catch(e) { state.worldState = {}; }
     try { state.equipment = JSON.parse(localStorage.getItem('rpg_equipment') || '{"arma":null,"armadura":null,"accesorio":null}'); }
     catch(e) { state.equipment = { arma: null, armadura: null, accesorio: null }; }
+    state.puntosDisponibles = parseInt(localStorage.getItem('rpg_puntos_disponibles') || '0') || 0;
     // Cargar puntos ASI — con migración automática desde saves antiguos
     try {
       const rawPS = localStorage.getItem('rpg_player_stats');
@@ -2146,11 +2148,11 @@ document.addEventListener('DOMContentLoaded', () => {
     addSystemMessage(`✦ ¡NIVEL ${next}! +${hpGained} HP · Curado al máximo · Competencia: ${fmtMod(getProfBonus(next))} · Próximo ASI: nivel ${nextAsi}`);
     logProgress(`${state.charName || 'El aventurero'} alcanzó el nivel ${next} con ${newMax} HP máximos.`, 'nivel');
 
-    let hayAsi = false;
+    let asiCount = 0;
     for (let lvl = prev + 1; lvl <= next; lvl++) {
-      if (ASI_LEVELS.has(lvl)) { hayAsi = true; break; }
+      if (ASI_LEVELS.has(lvl)) asiCount++;
     }
-    if (hayAsi) activarModoSubidaNivel();
+    if (asiCount > 0) activarModoSubidaNivel(asiCount);
   }
 
   // ═══════════════════════════════════════════════════════
@@ -2167,12 +2169,14 @@ document.addEventListener('DOMContentLoaded', () => {
     if (banner)  banner.classList.toggle('visible', activo);
     if (statsEl) statsEl.classList.toggle('stat-allocating', activo);
     btns.forEach(b => { b.style.display = activo ? 'inline-flex' : 'none'; });
+    lsSave('rpg_puntos_disponibles', String(state.puntosDisponibles));
   }
 
-  function activarModoSubidaNivel() {
-    state.puntosDisponibles = 2;
+  function activarModoSubidaNivel(asiCount = 1) {
+    state.puntosDisponibles += asiCount * 2;
     _syncModoASI();
-    addSystemMessage('✨ ¡MEJORA DE ATRIBUTO! Tienes 2 puntos para repartir. Pulsa los botones ＋ junto a cada estadística.');
+    const pts = state.puntosDisponibles;
+    addSystemMessage(`✨ ¡MEJORA DE ATRIBUTO! Tienes ${pts} punto${pts !== 1 ? 's' : ''} para repartir. Pulsa los botones ＋ junto a cada estadística.`);
   }
 
   function asignarPunto(statId) {

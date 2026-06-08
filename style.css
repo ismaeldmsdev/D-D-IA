@@ -171,18 +171,20 @@ body::before {
 
 /* Título con texto en gradiente dorado */
 .game-title {
-  font-family: var(--font-title);
-  font-size: 1.55rem;
-  font-weight: 700;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  /* Gradiente aplicado al texto */
-  background: var(--gold-gradient);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+  margin: 0;
+  padding: 0;
+  line-height: 1;
+  display: flex;
+  align-items: center;
   animation: titleBreathe 4s ease-in-out infinite;
   filter: drop-shadow(0 0 10px rgba(200,160,32,0.35));
+}
+
+.header-logo {
+  height: 38px;
+  width: auto;
+  object-fit: contain;
+  display: block;
 }
 
 @keyframes titleBreathe {
@@ -4140,6 +4142,7 @@ body.theme-parchment .enemy-card.mode-npc .enemy-card-header { color: #1a3080; }
   height: 120px;
   border-radius: 14px;
   object-fit: cover;
+  object-position: top center;
   filter: contrast(1.1) brightness(0.9);
 }
 
