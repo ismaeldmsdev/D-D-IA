@@ -5151,6 +5151,22 @@ body.theme-parchment .enemy-stack-ghost {
   color: rgba(110, 160, 255, 0.7);
 }
 
+/* Badge de título de clase — aparece bajo los inputs Clase/Nivel */
+.class-title-badge {
+  font-family: var(--font-title, 'Cinzel', serif);
+  font-size: 0.72rem;
+  letter-spacing: 0.14em;
+  color: var(--gold-mid, rgba(200, 165, 80, 0.85));
+  text-align: center;
+  padding: 3px 0 1px;
+  opacity: 0.88;
+  transition: opacity 0.4s ease;
+  pointer-events: none;
+}
+body.theme-parchment .class-title-badge {
+  color: rgba(100, 55, 10, 0.82);
+}
+
 /* ══════════════════════════════════════════════════════
    PARCHMENT — Panel de Hoja de Personaje
    ══════════════════════════════════════════════════ */

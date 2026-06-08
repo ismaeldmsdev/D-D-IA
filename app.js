@@ -1213,34 +1213,116 @@ document.addEventListener('DOMContentLoaded', () => {
     return 'img/enemigos/goblin-1.png';
   }
 
-  function getPlayerAvatarUrl(className) {
-    const slug = (className || '').trim().toLowerCase()
+  // \u2500 Progresi\u00f3n de clase: imagen + t\u00edtulo por niveles \u2500\u2500
+  const CLASS_PROGRESSION = {
+    'guerrero':   [
+      { from: 1,  file: 'guerrero_base',    title: 'Guerrero'            },
+      { from: 6,  file: 'guerrero_medio',   title: 'Veterano'            },
+      { from: 13, file: 'guerrero_final',   title: 'Campe\u00f3n'             },
+    ],
+    'mago':       [
+      { from: 1,  file: 'mago_base',        title: 'Mago Aprendiz'       },
+      { from: 6,  file: 'mago_medio',       title: 'Mago'                },
+      { from: 13, file: 'mago_final',       title: 'Archimago'           },
+    ],
+    'picaro':     [
+      { from: 1,  file: 'picaro_base',      title: 'P\u00edcaro'              },
+      { from: 6,  file: 'picaro_medio',     title: 'Ladr\u00f3n de Sombras'   },
+      { from: 13, file: 'picaro_final',     title: 'Maestro Asesino'     },
+    ],
+    'clerigo':    [
+      { from: 1,  file: 'clerigo_base',     title: 'Ac\u00f3lito'             },
+      { from: 6,  file: 'clerigo_medio',    title: 'Cl\u00e9rigo'             },
+      { from: 13, file: 'clerigo_final',    title: 'Sumo Sacerdote'      },
+    ],
+    'paladin':    [
+      { from: 1,  file: 'paladin_base',     title: 'Escudero'            },
+      { from: 6,  file: 'paladin_medio',    title: 'Palad\u00edn'             },
+      { from: 13, file: 'paladin_final',    title: 'Caballero Sagrado'   },
+    ],
+    'barbaro':    [
+      { from: 1,  file: 'barbaro_base',     title: 'B\u00e1rbaro'             },
+      { from: 6,  file: 'barbaro_medio',    title: 'Berserker'           },
+      { from: 13, file: 'barbaro_final',    title: 'Se\u00f1or de la Guerra'  },
+    ],
+    'bardo':      [
+      { from: 1,  file: 'bardo_base',       title: 'Juglar'              },
+      { from: 6,  file: 'bardo_medio',      title: 'Bardo'               },
+      { from: 13, file: 'bardo_final',      title: 'Gran Trovador'       },
+    ],
+    'druida':     [
+      { from: 1,  file: 'druida_base',      title: 'Druida Novicio'      },
+      { from: 6,  file: 'druida_medio',     title: 'Druida'              },
+      { from: 13, file: 'druida_final',     title: 'Archidruida'         },
+    ],
+    'explorador': [
+      { from: 1,  file: 'explorador_base',  title: 'Rastreador'          },
+      { from: 6,  file: 'explorador_medio', title: 'Explorador'          },
+      { from: 13, file: 'explorador_final', title: 'Se\u00f1or del Bosque'    },
+    ],
+    'monje':      [
+      { from: 1,  file: 'monje_base',       title: 'Novicio'             },
+      { from: 6,  file: 'monje_medio',      title: 'Monje'               },
+      { from: 13, file: 'monje_final',      title: 'Gran Maestro'        },
+    ],
+    'brujo':      [
+      { from: 1,  file: 'brujo_base',       title: 'Iniciado'            },
+      { from: 6,  file: 'brujo_medio',      title: 'Brujo'               },
+      { from: 13, file: 'brujo_final',      title: 'Se\u00f1or de los Pactos' },
+    ],
+    'hechicero':  [
+      { from: 1,  file: 'hechicero_base',   title: 'Aprendiz Arcano'     },
+      { from: 6,  file: 'hechicero_medio',  title: 'Hechicero'           },
+      { from: 13, file: 'hechicero_final',  title: 'Maestro Arcano'      },
+    ],
+  };
+
+  function _classSlug(name) {
+    return (name || '').trim().toLowerCase()
       .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-      .replace(/\s+/g, '-')
-      .replace(/[^a-z0-9-]/g, '');
-    return slug ? `img/protagonistas/${slug}.png` : 'img/protagonistas/default.png';
+      .replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+  }
+
+  function _classEntry(className, level) {
+    const entries = CLASS_PROGRESSION[_classSlug(className)];
+    if (!entries) return null;
+    let match = entries[0];
+    for (const e of entries) { if (level >= e.from) match = e; }
+    return match;
+  }
+
+  function getClassTitle(className, level) {
+    return _classEntry(className, level)?.title ?? (className || '');
+  }
+
+  function getPlayerAvatarUrl(className, level) {
+    const entry = _classEntry(className, level);
+    if (entry) return `img/protagonistas/${entry.file}.png`;
+    const slug = _classSlug(className);
+    return slug ? `img/protagonistas/${slug}.png` : 'img/protagonistas/guerrero_base.png';
   }
 
   function updatePlayerAvatar() {
-    const imgEl = $('player-sheet-avatar-img');
+    const imgEl       = $('player-sheet-avatar-img');
     const combatImgEl = $('player-avatar-img');
-    const cls = ($('char-class')?.value || state.charClass || '').trim();
-    const url = getPlayerAvatarUrl(cls);
-    
+    const cls   = ($('char-class')?.value || state.charClass || '').trim();
+    const level = parseInt($('char-level')?.value) || 1;
+    const url   = getPlayerAvatarUrl(cls, level);
+
     if (imgEl) {
       imgEl.src = url;
-      imgEl.onerror = () => {
-        imgEl.onerror = null;
-        imgEl.src = 'img/protagonistas/guerrero.png';
-      };
+      imgEl.onerror = () => { imgEl.onerror = null; imgEl.src = 'img/protagonistas/guerrero_base.png'; };
     }
-    
     if (combatImgEl) {
       combatImgEl.src = url;
-      combatImgEl.onerror = () => {
-        combatImgEl.onerror = null;
-        combatImgEl.src = 'img/protagonistas/guerrero.png';
-      };
+      combatImgEl.onerror = () => { combatImgEl.onerror = null; combatImgEl.src = 'img/protagonistas/guerrero_base.png'; };
+    }
+
+    const badge = $('class-title-badge');
+    if (badge) {
+      const title = getClassTitle(cls, level);
+      badge.textContent = title;
+      badge.style.display = title ? '' : 'none';
     }
   }
 
@@ -1721,7 +1803,7 @@ document.addEventListener('DOMContentLoaded', () => {
     body.innerHTML = `
       <div class="ps-identity">
         <div class="ps-name">${escHtml(charNameVal)}</div>
-        <div class="ps-class">${escHtml(charClassVal)} &middot; Nivel ${level}</div>
+        <div class="ps-class">${escHtml(getClassTitle(charClassVal, level))} &middot; Nivel ${level}</div>
       </div>
       <div class="ps-section">
         <div class="ps-section-title">Vida</div>
@@ -2005,6 +2087,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     updateHpBar();
     updateSkillBonuses();
+    updatePlayerAvatar();
     showLevelUpToast(next, hpGained);
 
     const nextAsi = [...ASI_LEVELS].sort((a, b) => a - b).find(l => l > next) ?? '—';
