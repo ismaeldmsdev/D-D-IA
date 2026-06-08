@@ -1838,6 +1838,51 @@ document.addEventListener('DOMContentLoaded', () => {
   window.openPlayerStatsPanel  = openPlayerStatsPanel;
   window.closePlayerStatsPanel = closePlayerStatsPanel;
 
+  // ─ Panel debug oculto — 7 taps en el nivel ───────────
+  {
+    let _tapCount = 0, _tapTimer = null;
+    $('char-level')?.addEventListener('click', () => {
+      _tapCount++;
+      clearTimeout(_tapTimer);
+      _tapTimer = setTimeout(() => { _tapCount = 0; }, 1800);
+      if (_tapCount >= 7) {
+        _tapCount = 0;
+        const p = $('debug-panel');
+        if (p) { p.classList.add('visible'); p.setAttribute('aria-hidden', 'false'); }
+      }
+    });
+
+    function _closeDebug() {
+      const p = $('debug-panel');
+      if (p) { p.classList.remove('visible'); p.setAttribute('aria-hidden', 'true'); }
+    }
+
+    $('debug-close')?.addEventListener('click', _closeDebug);
+    $('debug-panel')?.addEventListener('click', e => {
+      if (e.target.id === 'debug-panel') _closeDebug();
+    });
+
+    $('debug-xp-btn')?.addEventListener('click', () => {
+      const v = parseInt($('debug-xp-val')?.value) || 0;
+      if (v > 0) { applyXpGain(v); $('debug-xp-val').value = ''; }
+    });
+
+    $('debug-lvl-btn')?.addEventListener('click', () => {
+      const target = Math.min(20, Math.max(1, parseInt($('debug-lvl-val')?.value) || 1));
+      const xpEl   = $('xp-current');
+      if (xpEl) {
+        const needed = (XP_TABLE[target - 1] || 0) - (parseInt(xpEl.value) || 0);
+        if (needed > 0) applyXpGain(needed);
+      }
+      $('debug-lvl-val').value = '';
+    });
+
+    $('debug-hp-btn')?.addEventListener('click', () => {
+      const v = parseInt($('debug-hp-val')?.value) || 0;
+      if (v !== 0) { applyHpChange(v); $('debug-hp-val').value = ''; }
+    });
+  }
+
   // ─ NPCs ─────────────────────────────────────────────
   function showNpcCard(id) {
     const found = bestiario.npcs[id] ? { id, ...bestiario.npcs[id] } : lookupNpcByName(id);

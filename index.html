@@ -615,5 +615,25 @@
   <script src="stats-clases.js"></script>
   <script src="bestiario.js"></script>
   <script src="app.js"></script>
+
+  <!-- Panel debug oculto — activar con 7 taps en el número de nivel -->
+  <div id="debug-panel" class="debug-panel" aria-hidden="true">
+    <div class="debug-panel-inner">
+      <button class="debug-close" id="debug-close" aria-label="Cerrar">✕</button>
+      <div class="debug-title">⚙ Dev</div>
+      <div class="debug-row">
+        <input type="number" id="debug-xp-val" placeholder="XP" min="1" class="debug-input" />
+        <button class="debug-btn" id="debug-xp-btn">+XP</button>
+      </div>
+      <div class="debug-row">
+        <input type="number" id="debug-lvl-val" placeholder="Nv" min="1" max="20" class="debug-input" />
+        <button class="debug-btn" id="debug-lvl-btn">Nivel</button>
+      </div>
+      <div class="debug-row">
+        <input type="number" id="debug-hp-val" placeholder="HP" class="debug-input" />
+        <button class="debug-btn" id="debug-hp-btn">+HP</button>
+      </div>
+    </div>
+  </div>
 </body>
 </html>
