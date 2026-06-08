@@ -583,8 +583,41 @@ document.addEventListener('DOMContentLoaded', () => {
   $('enemy-detail-overlay')?.addEventListener('click', e => {
     if (e.target.id === 'enemy-detail-overlay') closeEnemyDetailModal();
   });
+
+  // ─ Player card → hoja de personaje ──────────────────
+  $('player-card')?.addEventListener('click', e => {
+    if (!$('player-card').classList.contains('active')) return;
+    const ignored = ['battle-panel-close'];
+    if (ignored.includes(e.target?.id)) return;
+    openPlayerStatsPanel();
+  });
+  $('player-detail-close')?.addEventListener('click', closePlayerStatsPanel);
+  $('player-detail-overlay')?.addEventListener('click', e => {
+    if (e.target.id === 'player-detail-overlay') closePlayerStatsPanel();
+  });
+
   document.addEventListener('keydown', e => {
-    if (e.key === 'Escape' && $('enemy-detail-overlay')?.classList.contains('visible')) closeEnemyDetailModal();
+    if (e.key !== 'Escape') return;
+    if ($('enemy-detail-overlay')?.classList.contains('visible'))  closeEnemyDetailModal();
+    if ($('player-detail-overlay')?.classList.contains('visible')) closePlayerStatsPanel();
+  });
+
+  // Acordeón: expandir/contraer tarjetas de enemigo al pulsar
+  $('enemy-detail-body')?.addEventListener('click', e => {
+    const block = e.target.closest('.enemy-stat-block');
+    if (!block) return;
+    const wasExpanded = block.classList.contains('is-expanded');
+    const body = $('enemy-detail-body');
+    body.querySelectorAll('.enemy-stat-block').forEach(b => {
+      b.classList.remove('is-expanded');
+      b.classList.add('is-collapsed');
+      b.setAttribute('aria-expanded', 'false');
+    });
+    if (!wasExpanded) {
+      block.classList.remove('is-collapsed');
+      block.classList.add('is-expanded');
+      block.setAttribute('aria-expanded', 'true');
+    }
   });
 
   // ═══════════════════════════════════════════════════════
@@ -1275,7 +1308,7 @@ document.addEventListener('DOMContentLoaded', () => {
           rImg.alt = `Avatar de ${entityData.name || 'enemigo'}`;
         }
         updateHealth('enemy', entityData.hpMax || 10, entityData.hpMax || 10);
-        _updateEnemyStack(entityData.count || 1);
+        _updateEnemyStack();
       }
       rCard.setAttribute('aria-hidden', 'false');
       rCard.classList.remove('active');
@@ -1429,32 +1462,55 @@ document.addEventListener('DOMContentLoaded', () => {
     const bData  = bestiario.enemigos[prompt] || lookupEnemyByName(name);
     const hpMax  = bData ? bData.hpMax : 10;
     const imgUrl = bData ? bData.img   : getEnemyImageUrl(name);
-    const n      = Math.max(1, Math.min(3, count));
+    const n      = Math.max(1, Math.min(6, count));
 
-    updatePlayerAvatar();
-
-    state.activeEnemy = {
+    const group = {
       prompt, name, hpMax, hpCurrent: hpMax,
       dano: bData?.dano ?? null, ca: bData?.ca ?? null, img: imgUrl,
       count: n,
     };
-    lsSave('rpg_active_enemy', JSON.stringify(state.activeEnemy));
 
+    if (state.activeEnemy && uiState.inCombat) {
+      // Añadir nuevo grupo al encuentro en curso
+      if (!state.activeEnemy.groups) state.activeEnemy.groups = [{ ...state.activeEnemy }];
+      state.activeEnemy.groups.push(group);
+      lsSave('rpg_active_enemy', JSON.stringify(state.activeEnemy));
+      _updateEnemyStack();
+      return;
+    }
+
+    // Nuevo encuentro
+    updatePlayerAvatar();
+    state.activeEnemy = { ...group, groups: [group] };
+    lsSave('rpg_active_enemy', JSON.stringify(state.activeEnemy));
     updateEntityUI('enemy', { name, img: imgUrl, hpMax, count: n }, true);
     $('enemy-stack-wrapper')?.classList.add('has-active');
+    _updateEnemyStack();
     vibe([20, 15, 50]);
   }
 
-  function _updateEnemyStack(count) {
+  function _updateEnemyStack() {
     const wrapper = $('enemy-stack-wrapper');
-    const badge   = $('enemy-count-badge');
     if (!wrapper) return;
+
+    const groups    = state.activeEnemy?.groups ?? (state.activeEnemy ? [state.activeEnemy] : []);
+    const numGroups = groups.length;
+    const g0count   = groups[0]?.count || 1;
+
+    // Visual: por grupos distintos usa numGroups; por copia del mismo tipo usa g0count
+    const stackN = numGroups > 1 ? Math.min(3, numGroups) : Math.min(3, g0count);
     wrapper.classList.remove('stack-1', 'stack-2', 'stack-3');
-    const n = Math.max(1, Math.min(3, count || 1));
-    wrapper.classList.add(`stack-${n}`);
-    if (badge) {
-      badge.textContent = n > 1 ? `×${n}` : '';
-    }
+    wrapper.classList.add(`stack-${Math.max(1, stackN)}`);
+
+    // Asignar imágenes a los ghost cards para que parezcan tarjetas reales
+    const ghost1 = wrapper.querySelector('.ghost-1');
+    const ghost2 = wrapper.querySelector('.ghost-2');
+    const img0   = groups[0]?.img || '';
+    // Para grupos distintos muestra la imagen del grupo siguiente; para copias del mismo tipo, misma imagen
+    const img1   = (numGroups > 1 ? groups[1]?.img : img0) || img0;
+    const img2   = (numGroups > 2 ? groups[2]?.img : img1) || img1;
+    if (ghost1) ghost1.style.backgroundImage = img1 ? `url('${img1}')` : '';
+    if (ghost2) ghost2.style.backgroundImage = img2 ? `url('${img2}')` : '';
   }
 
   function defeatEnemy() {
@@ -1463,8 +1519,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const overlay = $('death-overlay');
     if (!card?.classList.contains('active')) return;
 
-    const defeatedName = state.activeEnemy?.name || 'enemigo';
-    const remaining    = (state.activeEnemy?.count || 1) - 1;
+    const defeatedName  = state.activeEnemy?.name || 'enemigo';
+    const groups        = state.activeEnemy?.groups ?? (state.activeEnemy ? [state.activeEnemy] : []);
+    const currentGroup  = groups[0];
+    const remaining     = (currentGroup?.count || 1) - 1;
 
     closeEnemyDetailModal();
     logProgress(`Derrotó a ${defeatedName}.`, 'victoria');
@@ -1484,23 +1542,45 @@ document.addEventListener('DOMContentLoaded', () => {
         overlay?.classList.remove('visible');
         if (imgEl) { imgEl.style.filter = ''; imgEl.style.transition = ''; }
 
-        if (remaining > 0 && state.activeEnemy) {
-          // Quedan enemigos del mismo tipo — decrementar y reanimar la tarjeta
-          state.activeEnemy.count    = remaining;
-          state.activeEnemy.hpCurrent = state.activeEnemy.hpMax;
+        if (!state.activeEnemy) return; // endCombat() llamado mientras animaba
+
+        if (remaining > 0) {
+          // Quedan miembros del mismo grupo — decrementar y reanimar
+          currentGroup.count     = remaining;
+          currentGroup.hpCurrent = currentGroup.hpMax;
+          state.activeEnemy.count     = remaining;
+          state.activeEnemy.hpCurrent = currentGroup.hpMax;
           lsSave('rpg_active_enemy', JSON.stringify(state.activeEnemy));
-          _updateEnemyStack(remaining);
-          updateHealth('enemy', state.activeEnemy.hpMax, state.activeEnemy.hpMax);
+          _updateEnemyStack();
+          updateHealth('enemy', currentGroup.hpMax, currentGroup.hpMax);
           card.setAttribute('aria-hidden', 'false');
           card.classList.remove('active');
           void card.offsetWidth;
           card.classList.add('active', 'mode-combat');
         } else {
-          state.activeEnemy = null;
-          localStorage.removeItem('rpg_active_enemy');
-          $('enemy-stack-wrapper')?.classList.remove('has-active');
-          _updateEnemyStack(1);
-          updateEntityUI('enemy', null, false);
+          // Grupo agotado — pasar al siguiente tipo de enemigo
+          state.activeEnemy.groups.shift();
+          const nextGroup = state.activeEnemy.groups[0];
+          if (nextGroup) {
+            state.activeEnemy = { ...nextGroup, groups: state.activeEnemy.groups };
+            lsSave('rpg_active_enemy', JSON.stringify(state.activeEnemy));
+            _updateEnemyStack();
+            if (imgEl) imgEl.src = nextGroup.img;
+            const nameEl = $('enemy-card-name');
+            if (nameEl) nameEl.textContent = nextGroup.name;
+            updateHealth('enemy', nextGroup.hpMax, nextGroup.hpMax);
+            card.setAttribute('aria-hidden', 'false');
+            card.classList.remove('active');
+            void card.offsetWidth;
+            card.classList.add('active', 'mode-combat');
+          } else {
+            // Todos los grupos derrotados
+            state.activeEnemy = null;
+            localStorage.removeItem('rpg_active_enemy');
+            $('enemy-stack-wrapper')?.classList.remove('has-active');
+            _updateEnemyStack();
+            updateEntityUI('enemy', null, false);
+          }
         }
       }, 650);
     }, 1100);
@@ -1516,7 +1596,7 @@ document.addEventListener('DOMContentLoaded', () => {
     $('enemy-stack-wrapper')?.classList.remove('has-active');
     state.activeEnemy = null;
     localStorage.removeItem('rpg_active_enemy');
-    _updateEnemyStack(1);
+    _updateEnemyStack();
     addSystemMessage('🏃 El combate ha concluido.');
     if (card?.classList.contains('active')) {
       card.classList.add('defeated');
@@ -1534,28 +1614,37 @@ document.addEventListener('DOMContentLoaded', () => {
   window.endCombat = endCombat;
 
   // ─ Ficha de Enemigo — Modal de detalles ─────────────
-  function _buildEnemyStatBlock(e, index, isCurrent) {
+  function _buildEnemyStatBlock(e, isCurrent) {
     const hp  = isCurrent ? e.hpCurrent : e.hpMax;
     const pct = Math.round((hp / e.hpMax) * 100);
-    const label = e.count > 1
-      ? `<div class="enemy-stat-count">${isCurrent ? '⚔ EN COMBATE' : `EN ESPERA · #${index + 1}`}</div>`
-      : '';
+    const statusClass = isCurrent ? 'enemy-stat-active-badge' : 'enemy-stat-wait-badge';
+    const statusText  = isCurrent ? '⚔ EN COMBATE' : '⏳ EN ESPERA';
+    const countText   = e.count > 1 ? ` · ×${e.count}` : '';
+    const expandClass = isCurrent ? 'is-expanded' : 'is-collapsed';
+    const typeClass   = isCurrent ? 'enemy-stat-active' : 'enemy-stat-waiting';
     return `
-      <div class="enemy-stat-block${isCurrent ? ' enemy-stat-active' : ' enemy-stat-waiting'}">
-        <img class="enemy-stat-img" src="${escHtml(e.img)}" alt="${escHtml(e.name)}"
-             onerror="this.src='img/enemigos/goblin-1.png'">
-        <div class="enemy-stat-name">${escHtml(e.name)}</div>
-        ${label}
-        <div class="enemy-stat-hp-row">
-          <span class="enemy-stat-hp-label">Puntos de Vida</span>
-          <div class="enemy-stat-hp-bar-wrap">
-            <div class="enemy-stat-hp-bar" style="width:${pct}%"></div>
+      <div class="enemy-stat-block ${expandClass} ${typeClass}" role="button" tabindex="0" aria-expanded="${isCurrent}">
+        <div class="enemy-stat-compact">
+          <img class="enemy-stat-img" src="${escHtml(e.img)}" alt="${escHtml(e.name)}"
+               onerror="this.src='img/enemigos/goblin-1.png'">
+          <div class="enemy-stat-compact-info">
+            <div class="enemy-stat-name">${escHtml(e.name)}</div>
+            <div class="enemy-stat-count ${statusClass}">${statusText}${countText}</div>
           </div>
-          <div class="enemy-stat-hp-text">${hp} / ${e.hpMax}</div>
+          <span class="enemy-stat-chevron">▾</span>
         </div>
-        <div class="enemy-stat-grid">
-          ${e.ca   ? `<div class="enemy-stat-cell"><span class="enemy-stat-label">Armadura (CA)</span><span class="enemy-stat-value">🛡 ${e.ca}</span></div>` : ''}
-          ${e.dano ? `<div class="enemy-stat-cell"><span class="enemy-stat-label">Daño por Ataque</span><span class="enemy-stat-value">⚔ ${e.dano}</span></div>` : ''}
+        <div class="enemy-stat-detail">
+          <div class="enemy-stat-hp-row">
+            <span class="enemy-stat-hp-label">Puntos de Vida</span>
+            <div class="enemy-stat-hp-bar-wrap">
+              <div class="enemy-stat-hp-bar" style="width:${pct}%"></div>
+            </div>
+            <div class="enemy-stat-hp-text">${hp} / ${e.hpMax}</div>
+          </div>
+          <div class="enemy-stat-grid">
+            ${e.ca   ? `<div class="enemy-stat-cell"><span class="enemy-stat-label">Armadura (CA)</span><span class="enemy-stat-value">🛡 ${e.ca}</span></div>` : ''}
+            ${e.dano ? `<div class="enemy-stat-cell"><span class="enemy-stat-label">Daño</span><span class="enemy-stat-value">⚔ ${e.dano}</span></div>` : ''}
+          </div>
         </div>
       </div>`;
   }
@@ -1566,12 +1655,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const body    = $('enemy-detail-body');
     if (!e || !overlay || !body) return;
 
-    const count = e.count || 1;
-    let html = '';
-    for (let i = 0; i < count; i++) {
-      html += _buildEnemyStatBlock(e, i, i === 0);
-    }
-    body.innerHTML = html;
+    const groups = state.activeEnemy.groups ?? [state.activeEnemy];
+    body.innerHTML = groups.map((g, i) => _buildEnemyStatBlock(g, i === 0)).join('');
 
     overlay.classList.add('visible');
     overlay.setAttribute('aria-hidden', 'false');
@@ -1586,6 +1671,90 @@ document.addEventListener('DOMContentLoaded', () => {
 
   window.openEnemyDetailModal  = openEnemyDetailModal;
   window.closeEnemyDetailModal = closeEnemyDetailModal;
+
+  // ─ Hoja de Personaje — Panel lateral ────────────────
+  function openPlayerStatsPanel() {
+    const overlay = $('player-detail-overlay');
+    const body    = $('player-detail-body');
+    if (!overlay || !body) return;
+
+    const hp      = parseInt($('hp-current')?.value)         || 0;
+    const maxHp   = parseInt($('hp-max')?.value)             || 1;
+    const xp      = parseInt($('xp-current')?.value)         || 0;
+    const xpNext  = parseInt($('xp-next')?.textContent)      || 300;
+    const level   = parseInt($('char-level')?.value)         || 1;
+    const charNameVal  = $('char-name')?.value  || 'Aventurero';
+    const charClassVal = $('char-class')?.value || '—';
+    const profBonus = $('prof-bonus-val')?.textContent       || '+2';
+
+    const hpPct = Math.min(100, Math.round((hp / maxHp) * 100));
+    const xpPct = Math.min(100, Math.round((xp / xpNext) * 100));
+
+    const statKeys = [
+      { key: 'str', abbr: 'FUE', icon: '⚔' },
+      { key: 'dex', abbr: 'DES', icon: '🏃' },
+      { key: 'con', abbr: 'CON', icon: '🛡' },
+      { key: 'int', abbr: 'INT', icon: '📚' },
+      { key: 'wis', abbr: 'SAB', icon: '👁' },
+      { key: 'cha', abbr: 'CAR', icon: '✨' },
+    ];
+    const statsHtml = statKeys.map(({ key, abbr, icon }) => {
+      const val    = getEffectiveStatValue(key);
+      const mod    = Math.floor((val - 10) / 2);
+      const modStr = mod >= 0 ? `+${mod}` : `${mod}`;
+      return `<div class="ps-stat-cell">
+        <span class="ps-stat-icon">${icon}</span>
+        <span class="ps-stat-abbr">${abbr}</span>
+        <span class="ps-stat-value">${val}</span>
+        <span class="ps-stat-mod">${modStr}</span>
+      </div>`;
+    }).join('');
+
+    const slotLabels = { arma: 'Arma', armadura: 'Armadura', accesorio: 'Accesorio' };
+    const eqHtml = Object.entries(slotLabels).map(([slot, label]) => {
+      const item = state.equipment[slot];
+      return item
+        ? `<div class="ps-equip-item"><span class="ps-equip-slot">${label}</span><span class="ps-equip-name">${escHtml(item.name)}</span></div>`
+        : '';
+    }).filter(Boolean).join('') || '<div class="ps-empty">Sin equipamiento activo</div>';
+
+    body.innerHTML = `
+      <div class="ps-identity">
+        <div class="ps-name">${escHtml(charNameVal)}</div>
+        <div class="ps-class">${escHtml(charClassVal)} &middot; Nivel ${level}</div>
+      </div>
+      <div class="ps-section">
+        <div class="ps-section-title">Vida</div>
+        <div class="ps-hp-bar-wrap"><div class="ps-hp-bar" style="width:${hpPct}%"></div></div>
+        <div class="ps-hp-text">${hp} / ${maxHp} HP</div>
+      </div>
+      <div class="ps-section">
+        <div class="ps-section-title">Experiencia &middot; Competencia ${escHtml(profBonus)}</div>
+        <div class="ps-xp-bar-wrap"><div class="ps-xp-bar" style="width:${xpPct}%"></div></div>
+        <div class="ps-xp-text">${xp} / ${xpNext} XP</div>
+      </div>
+      <div class="ps-section">
+        <div class="ps-section-title">Atributos</div>
+        <div class="ps-stats-grid">${statsHtml}</div>
+      </div>
+      <div class="ps-section">
+        <div class="ps-section-title">Equipamiento</div>
+        <div class="ps-equip-list">${eqHtml}</div>
+      </div>`;
+
+    overlay.classList.add('visible');
+    overlay.setAttribute('aria-hidden', 'false');
+  }
+
+  function closePlayerStatsPanel() {
+    const overlay = $('player-detail-overlay');
+    if (!overlay) return;
+    overlay.classList.remove('visible');
+    overlay.setAttribute('aria-hidden', 'true');
+  }
+
+  window.openPlayerStatsPanel  = openPlayerStatsPanel;
+  window.closePlayerStatsPanel = closePlayerStatsPanel;
 
   // ─ NPCs ─────────────────────────────────────────────
   function showNpcCard(id) {
@@ -2121,7 +2290,7 @@ IMPORTANTE: Interpreta a este personaje con coherencia total a su personalidad y
   // ═══════════════════════════════════════════════════════
   function parseDmTags(text) {
     let totalXP = 0, hpDelta = 0, enemyHpDelta = 0, rollAttr = null, diaryEntry = null, imagePrompt = null;
-    let enemyCardData = null, enemyDefeated = false, npcCardId = null, npcName = null, setLocation = null, endConversation = false, combatEnded = false, compressedDiary = null;
+    const enemyCardList = []; let enemyDefeated = false, npcCardId = null, npcName = null, setLocation = null, endConversation = false, combatEnded = false, compressedDiary = null;
     const worldUpdates = [];
     const itemsToAdd = [], itemsToRemove = [];
     const questsToAdd = [], questsToComplete = [];
@@ -2174,11 +2343,11 @@ IMPORTANTE: Interpreta a este personaje con coherencia total a su personalidad y
         return '';
       })
       .replace(/\[ENEMY_CARD:\s*([^|\]]+)\|?([^|\]]*)\|?([^\]]*)\]/gi, (_, prompt, name, countStr) => {
-        if (!enemyCardData) enemyCardData = {
+        enemyCardList.push({
           prompt: prompt.trim().replace(/\s+/g, '-').toLowerCase(),
           name:   (name.trim() || 'Enemigo'),
-          count:  Math.max(1, Math.min(3, parseInt(countStr.trim()) || 1)),
-        };
+          count:  Math.max(1, Math.min(6, parseInt(countStr.trim()) || 1)),
+        });
         return '';
       })
       .replace(/\[ENEMY_DEFEATED\]/gi,    () => { enemyDefeated  = true; return ''; })
@@ -2220,7 +2389,7 @@ IMPORTANTE: Interpreta a este personaje con coherencia total a su personalidad y
       })
       .trim();
 
-    return { cleaned, totalXP, hpDelta, enemyHpDelta, rollAttr, diaryEntry, imagePrompt, enemyCardData, enemyDefeated, npcCardId, npcName, setLocation, worldUpdates, endConversation, combatEnded, compressedDiary, npcMemos, locationMemos, moralNotes, itemsToAdd, itemsToRemove, questsToAdd, questsToComplete };
+    return { cleaned, totalXP, hpDelta, enemyHpDelta, rollAttr, diaryEntry, imagePrompt, enemyCardList, enemyDefeated, npcCardId, npcName, setLocation, worldUpdates, endConversation, combatEnded, compressedDiary, npcMemos, locationMemos, moralNotes, itemsToAdd, itemsToRemove, questsToAdd, questsToComplete };
   }
 
   function applyXpGain(amount) {
@@ -2302,7 +2471,7 @@ IMPORTANTE: Interpreta a este personaje con coherencia total a su personalidad y
       const {
         cleaned: displayText,
         totalXP, hpDelta, enemyHpDelta, rollAttr, diaryEntry, imagePrompt,
-        enemyCardData, enemyDefeated, npcCardId, npcName, setLocation, worldUpdates, endConversation, combatEnded, compressedDiary,
+        enemyCardList, enemyDefeated, npcCardId, npcName, setLocation, worldUpdates, endConversation, combatEnded, compressedDiary,
         npcMemos, locationMemos, moralNotes,
         itemsToAdd, itemsToRemove,
         questsToAdd, questsToComplete,
@@ -2366,7 +2535,7 @@ IMPORTANTE: Interpreta a este personaje con coherencia total a su personalidad y
       if (setLocation) _setCurrentLocation(setLocation.toLowerCase().trim(), setLocation.trim());
 
       // Tarjeta de enemigo/NPC
-      if (enemyCardData)   showEnemyCard(enemyCardData.prompt, enemyCardData.name, enemyCardData.count || 1);
+      for (const ec of enemyCardList) showEnemyCard(ec.prompt, ec.name, ec.count || 1);
       if (enemyDefeated)   defeatEnemy();
       if (combatEnded)     endCombat();
       if (npcCardId)       showNpcCard(npcCardId);
@@ -2957,7 +3126,8 @@ IMPORTANTE: Interpreta a este personaje con coherencia total a su personalidad y
             updateHealth('enemy', enemy.hpCurrent, enemy.hpMax);
             if (state.activeEnemy) state.activeEnemy.hpCurrent = enemy.hpCurrent;
           }
-          _updateEnemyStack(enemy.count || 1);
+          if (!enemy.groups) enemy.groups = [{ ...enemy }];
+          _updateEnemyStack();
           $('enemy-stack-wrapper')?.classList.add('has-active');
         }
       } else {
