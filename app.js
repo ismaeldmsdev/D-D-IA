@@ -67,7 +67,8 @@ document.addEventListener('DOMContentLoaded', () => {
     charClass:         '',
     inventory:         [],   // [{id, name, isConsumable}]
     quests:            [],   // [{id, title, status: 'active'|'completed'}]
-    pendingRoll:       null, // {attr, label} | null
+    pendingRoll:       null, // {attr, label, mode:'normal'|'ventaja'|'desventaja'} | null
+    deathSaves:        { successes: 0, failures: 0, active: false },
     campaignDiary:     '',   // Resumen acumulado de eventos importantes
     rollHistory:       [],   // [{label, roll, mod, total, type}] — hasta 30 entradas
     activeEnemy:       null, // {prompt, name, hpMax, hpCurrent, dano, ca, img} | null
@@ -82,6 +83,13 @@ document.addEventListener('DOMContentLoaded', () => {
     worldState:        {},   // { [clave]: valor } — estado global del mundo (ciudades, facciones, NPCs clave)
     equipment:         { arma: null, armadura: null, accesorio: null }, // slots de equipamiento activo
     gold:              0,   // monedas de oro del personaje
+    spells:            [],  // [{id, name, tipo: 'cantrip'|'nivel1'}]
+    preparedSpell:     null,// nombre del hechizo preparado actualmente
+    spellSlotsUsed:    0,   // slots gastados (se recuperan al descansar)
+    shopItems:         [],  // [{id, name, price, tipo}] — tienda activa
+    conditions:        [],  // condiciones activas: ['veneno', 'aturdido', ...]
+    factions:          {},  // { [id]: { name, value: -100..100 } }
+    playerNotes:       '',  // notas libres del jugador
   };
 
   // ─────────────────────────────────────────────────────
@@ -172,6 +180,23 @@ document.addEventListener('DOMContentLoaded', () => {
     if (pct > 60)      bar.style.background = target === 'enemy' ? 'linear-gradient(90deg,#e74c3c,#c0392b)' : 'linear-gradient(90deg,#2ecc71,#27ae60)';
     else if (pct > 25) bar.style.background = target === 'enemy' ? 'linear-gradient(90deg,#f39c12,#e67e22)' : 'linear-gradient(90deg,#f1c40f,#f39c12)';
     else               bar.style.background = target === 'enemy' ? 'linear-gradient(90deg,#7d1010,#c0392b)' : 'linear-gradient(90deg,#b71c1c,#7d1010)';
+
+    // Sync combat screen HP bars
+    const csFillId = target === 'enemy' ? 'cs-enemy-hp-fill' : 'cs-player-hp-fill';
+    const csTxtId  = target === 'enemy' ? 'cs-enemy-hp-text' : 'cs-player-hp-text';
+    const csFill = $(csFillId);
+    const csTxt  = $(csTxtId);
+    if (csFill) { csFill.style.width = pct + '%'; _csApplyHpColor(csFill, pct, target === 'enemy'); }
+    if (csTxt)  csTxt.textContent = `${cur} / ${max}`;
+    if (target === 'enemy' && state.activeEnemy) {
+      const csName = $('cs-enemy-name');
+      const csImg  = $('cs-enemy-avatar');
+      if (csName) csName.textContent = state.activeEnemy.name || '—';
+      if (csImg && state.activeEnemy.img) {
+        csImg.src = state.activeEnemy.img;
+        csImg.onerror = () => { csImg.onerror = null; csImg.src = 'img/enemigos/goblin-1.png'; };
+      }
+    }
   }
   // Exponer para que la IA/DM pueda llamarlo
   window.updateHealth = updateHealth;
@@ -288,15 +313,19 @@ document.addEventListener('DOMContentLoaded', () => {
   // ═══════════════════════════════════════════════════════
   // DADO D20 INTERACTIVO — Tirada solicitada por la IA
   // ═══════════════════════════════════════════════════════
-  function activatePendingRoll(attrRaw) {
+  function activatePendingRoll(attrRaw, mode = 'normal') {
     const statId = resolveAttr(attrRaw);
-    state.pendingRoll = { attr: statId, label: attrRaw };
+    state.pendingRoll = { attr: statId, label: attrRaw, mode };
     saveGameState();
 
     if (diceRollBtn) {
       diceRollBtn.disabled = false;
+      diceRollBtn.classList.remove('roll-advantage', 'roll-disadvantage');
       diceRollBtn.classList.add('roll-requested');
-      diceRollBtn.title = `¡La IA pide tirada de ${attrRaw}! Haz clic para lanzar`;
+      if (mode === 'ventaja')    diceRollBtn.classList.add('roll-advantage');
+      if (mode === 'desventaja') diceRollBtn.classList.add('roll-disadvantage');
+      const modeLabel = mode === 'ventaja' ? ' [VENTAJA]' : mode === 'desventaja' ? ' [DESVENTAJA]' : '';
+      diceRollBtn.title = `¡La IA pide tirada de ${attrRaw}${modeLabel}! Haz clic para lanzar`;
     }
   }
 
@@ -306,7 +335,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (diceRollBtn) {
       diceRollBtn.disabled = true;
-      diceRollBtn.classList.remove('roll-requested');
+      diceRollBtn.classList.remove('roll-requested', 'roll-advantage', 'roll-disadvantage');
       diceRollBtn.title = 'Esperando petición de tirada...';
     }
   }
@@ -442,11 +471,17 @@ document.addEventListener('DOMContentLoaded', () => {
   function triggerDiceRoll() {
     if (!state.pendingRoll || state.isStreaming) return;
 
-    const { attr, label } = state.pendingRoll;
+    const { attr, label, mode = 'normal' } = state.pendingRoll;
     const statVal = parseInt($(`stat-${attr}`)?.value) || 10;
     const mod     = calcMod(statVal);
-    const roll    = rollD20();
-    const total   = roll + mod;
+
+    const roll1 = rollD20();
+    const roll2 = mode !== 'normal' ? rollD20() : null;
+    const roll  = mode === 'ventaja'    ? Math.max(roll1, roll2)
+                : mode === 'desventaja' ? Math.min(roll1, roll2)
+                : roll1;
+    const discarded = mode !== 'normal' ? (roll === roll1 ? roll2 : roll1) : null;
+    const total = roll + mod;
 
     deactivatePendingRoll();
 
@@ -461,8 +496,10 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!overlay || !diceBtn) return; // fallback: nodo no encontrado
 
     // Setup inicial
-    titleEl.textContent  = `⚔ ¡PRUEBA DE ${label.toUpperCase()}!`;
-    modEl.textContent    = mod !== 0 ? `Modificador: ${fmtMod(mod)} (${label})` : `Atributo: ${label}`;
+    titleEl.textContent = mode === 'ventaja'    ? `⬆ ¡VENTAJA! — ${label.toUpperCase()}`
+                        : mode === 'desventaja' ? `⬇ ¡DESVENTAJA! — ${label.toUpperCase()}`
+                        : `⚔ ¡PRUEBA DE ${label.toUpperCase()}!`;
+    modEl.textContent   = mod !== 0 ? `Modificador: ${fmtMod(mod)} (${label})` : `Atributo: ${label}`;
     numberEl.textContent = '?';
     numberEl.style.color = '';
     hintEl.style.opacity = '1';
@@ -530,6 +567,15 @@ document.addEventListener('DOMContentLoaded', () => {
         // Vibración háptica de revelación
         vibe(isCrit || roll === 1 ? [100, 50, 100] : 50);
 
+        // Mostrar ambos dados si hay ventaja/desventaja
+        if (mode !== 'normal' && discarded !== null) {
+          const modeIcon = mode === 'ventaja' ? '⬆' : '⬇';
+          modEl.innerHTML = `${modeIcon} ${mode === 'ventaja' ? 'Ventaja' : 'Desventaja'}: `
+            + `<span style="color:var(--gold-bright);font-weight:bold">${roll}</span>`
+            + ` · <span style="opacity:0.4;text-decoration:line-through">${discarded}</span>`
+            + (mod !== 0 ? ` ${fmtMod(mod)}` : '');
+        }
+
         // Registrar en la Bitácora del Destino
         addRollToHistory(label, roll, mod, total);
 
@@ -542,11 +588,14 @@ document.addEventListener('DOMContentLoaded', () => {
             overlay.classList.remove('fade-out');
             overlay.setAttribute('aria-hidden', 'true');
 
-            const modStr = mod !== 0 ? ` ${fmtMod(mod)} (${label})` : '';
+            const modStr  = mod !== 0 ? ` ${fmtMod(mod)} (${label})` : '';
+            const modeStr = mode === 'ventaja'    ? ` [ventaja: ${roll} vs ${discarded}]`
+                          : mode === 'desventaja' ? ` [desventaja: ${roll} vs ${discarded}]`
+                          : '';
             const emoji  = isCrit ? ' ⚡ ¡CRÍTICO NATURAL!'
                          : roll === 1 ? ' 💀 ¡PIFIA NATURAL!'
                          : '';
-            const msg = `🎲 Tirada de ${label}: ${roll}${modStr} = **${total}**${emoji}`;
+            const msg = `🎲 Tirada de ${label}${modeStr}: ${roll}${modStr} = **${total}**${emoji}`;
             addPlayerMessage(msg);
             updateStats();
             callDM(msg);
@@ -571,7 +620,45 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   diceRollBtn?.addEventListener('click', triggerDiceRoll);
-  $('battle-panel-close')?.addEventListener('click', () => endCombat());
+
+  // ── Dado libre (selector de tipo de dado) ──────────────
+  const freeDiceTrigger = $('free-dice-trigger');
+  const freeDiceMenu    = $('free-dice-menu');
+
+  freeDiceTrigger?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const open = freeDiceMenu.classList.toggle('open');
+    freeDiceMenu.setAttribute('aria-hidden', String(!open));
+  });
+
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('#free-dice-wrapper')) {
+      freeDiceMenu?.classList.remove('open');
+      freeDiceMenu?.setAttribute('aria-hidden', 'true');
+    }
+  });
+
+  $$('.free-dice-opt').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const attrId = btn.dataset.attr;
+      const label  = btn.dataset.label;
+      freeDiceMenu.classList.remove('open');
+      freeDiceMenu.setAttribute('aria-hidden', 'true');
+      // Activar la tirada cinemática con ese atributo
+      activatePendingRoll(label, 'normal');
+      // Forzar ejecución inmediata de la tirada
+      triggerDiceRoll();
+    });
+  });
+
+  $('battle-panel-close')?.addEventListener('click', () => {
+    if (uiState.inCombat) endCombat();
+    else if (uiState.inConversation) hideNpcCard();
+  });
+
+  $('cs-close-btn')?.addEventListener('click', () => {
+    if (uiState.inCombat) endCombat();
+  });
 
   // ─ Enemy detail modal ───────────────────────────────
   $('enemy-stack-wrapper')?.addEventListener('click', e => {
@@ -812,6 +899,527 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // ═══════════════════════════════════════════════════════
+  // HECHIZOS
+  // ═══════════════════════════════════════════════════════
+  function isMagicClass(className) {
+    return MAGIC_CLASS_SLUGS.has(_classSlug(className));
+  }
+
+  function updateSpellSection() {
+    const cls = ($('char-class')?.value || state.charClass || '').trim();
+    const el  = $('spell-section');
+    if (el) el.style.display = isMagicClass(cls) ? '' : 'none';
+  }
+
+  function renderSpellSlots() {
+    const cls   = ($('char-class')?.value || state.charClass || '').trim();
+    const lvl   = parseInt($('char-level')?.value) || 1;
+    const total = getSpellSlotMax(cls, lvl);
+    const avail = Math.max(0, total - state.spellSlotsUsed);
+    const el    = $('spell-slots-display');
+    if (!el) return;
+    if (total === 0) { el.innerHTML = ''; return; }
+    const slug      = _classSlug(cls);
+    const restLabel = slug === 'brujo' ? 'D.Corto' : 'D.Largo';
+    let html = '<div class="slot-pips">';
+    for (let i = 0; i < total; i++) {
+      html += `<span class="slot-pip ${i < avail ? 'slot-available' : 'slot-used'}"></span>`;
+    }
+    html += `</div><span class="slots-label">${avail}/${total} · ${restLabel}</span>`;
+    el.innerHTML = html;
+  }
+
+  function renderSpells() {
+    const listEl  = $('known-spells-list');
+    const emptyEl = $('spells-empty');
+    if (!listEl) return;
+    listEl.querySelectorAll('.spell-item').forEach(e => e.remove());
+    updateSpellSection();
+
+    const prepNameEl = $('prepared-spell-name');
+    if (prepNameEl) prepNameEl.textContent = state.preparedSpell || '—';
+    const castBtn = $('cast-spell-btn');
+    if (castBtn) castBtn.disabled = !state.preparedSpell;
+
+    if (emptyEl) emptyEl.style.display = state.spells.length === 0 ? 'block' : 'none';
+
+    state.spells.forEach(spell => {
+      const isPrepared = spell.name === state.preparedSpell;
+      const isCantrip  = spell.tipo === 'cantrip';
+      const el = document.createElement('div');
+      el.className = `spell-item${isPrepared ? ' spell-prepared' : ''}`;
+      el.dataset.id = spell.id;
+      el.innerHTML = `
+        <span class="spell-tipo-badge ${isCantrip ? 'badge-cantrip' : 'badge-hechizo'}">${isCantrip ? 'T' : 'H'}</span>
+        <span class="spell-name">${escHtml(spell.name)}</span>
+        <div class="spell-actions">
+          <button type="button" class="spell-prepare-btn${isPrepared ? ' active' : ''}" data-id="${escHtml(spell.id)}" title="${isPrepared ? 'Preparado' : 'Preparar'}">${isPrepared ? '✦' : '◇'}</button>
+          <button type="button" class="spell-del-btn" data-id="${escHtml(spell.id)}" aria-label="Eliminar hechizo">✕</button>
+        </div>`;
+      listEl.appendChild(el);
+    });
+    renderSpellSlots();
+  }
+
+  function addSpell(name, tipo) {
+    if (!name) return;
+    tipo = (tipo || 'nivel1').toLowerCase() === 'cantrip' ? 'cantrip' : 'nivel1';
+    const already = state.spells.find(s => s.name.toLowerCase() === name.toLowerCase().trim());
+    if (already) return;
+    const id = 'spell_' + Date.now() + '_' + Math.random().toString(36).slice(2, 5);
+    state.spells.push({ id, name: name.trim(), tipo });
+    saveGameState();
+    renderSpells();
+    addSystemMessage(`✨ Aprendes el hechizo: "${name.trim()}"`);
+  }
+
+  function removeSpell(name) {
+    const lower = name.toLowerCase().trim();
+    const idx = state.spells.findIndex(s => s.name.toLowerCase() === lower || s.name.toLowerCase().includes(lower));
+    if (idx === -1) return;
+    const removed = state.spells.splice(idx, 1)[0];
+    if (state.preparedSpell === removed.name) state.preparedSpell = null;
+    saveGameState();
+    renderSpells();
+    addSystemMessage(`☁ Olvidas el hechizo: "${removed.name}"`);
+  }
+
+  function prepareSpell(spellId) {
+    const spell = state.spells.find(s => s.id === spellId);
+    if (!spell) return;
+    state.preparedSpell = spell.name === state.preparedSpell ? null : spell.name;
+    saveGameState();
+    renderSpells();
+  }
+
+  function useSpellSlot() {
+    const cls   = ($('char-class')?.value || state.charClass || '').trim();
+    const lvl   = parseInt($('char-level')?.value) || 1;
+    const total = getSpellSlotMax(cls, lvl);
+    if (state.spellSlotsUsed < total) {
+      state.spellSlotsUsed++;
+      lsSave('rpg_spell_slots_used', String(state.spellSlotsUsed));
+      renderSpellSlots();
+    }
+  }
+
+  function restoreSpellSlots() {
+    state.spellSlotsUsed = 0;
+    lsSave('rpg_spell_slots_used', '0');
+    renderSpellSlots();
+    addSystemMessage('🌙 Slots de hechizo restaurados.');
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // EFECTOS DE ESTADO (CONDICIONES)
+  // ═══════════════════════════════════════════════════════
+  const CONDITION_DEFS = {
+    veneno:     { label: 'Envenenado',  emoji: '🤢', cls: 'cond-bad'     },
+    aturdido:   { label: 'Aturdido',    emoji: '💫', cls: 'cond-bad'     },
+    cegado:     { label: 'Cegado',      emoji: '🙈', cls: 'cond-bad'     },
+    asustado:   { label: 'Asustado',    emoji: '😱', cls: 'cond-bad'     },
+    hechizado:  { label: 'Hechizado',   emoji: '💜', cls: 'cond-neutral' },
+    paralizado: { label: 'Paralizado',  emoji: '⚡', cls: 'cond-bad'     },
+    quemado:    { label: 'Quemado',     emoji: '🔥', cls: 'cond-fire'    },
+    bendecido:  { label: 'Bendecido',   emoji: '✨', cls: 'cond-good'    },
+    maldito:    { label: 'Maldito',     emoji: '💀', cls: 'cond-curse'   },
+    invisible:  { label: 'Invisible',   emoji: '👻', cls: 'cond-neutral' },
+    atado:      { label: 'Atado',       emoji: '⛓',  cls: 'cond-bad'     },
+    agotado:    { label: 'Agotado',     emoji: '😴', cls: 'cond-bad'     },
+    concentrado:{ label: 'Concentrado', emoji: '🧘', cls: 'cond-good'    },
+    protegido:  { label: 'Protegido',   emoji: '🛡', cls: 'cond-good'    },
+  };
+
+  function _normalizeCondKey(s) {
+    return s.toLowerCase().trim().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  }
+
+  function renderConditions() {
+    const barCombat = $('conditions-bar-combat');
+    const badgesSheet = $('conditions-badges-sheet');
+    const sheetRow = $('conditions-sheet-row');
+
+    const html = state.conditions.map(key => {
+      const def = CONDITION_DEFS[key];
+      const label = def ? def.label : key;
+      const emoji = def ? def.emoji : '⚑';
+      const cls   = def ? def.cls  : 'cond-bad';
+      return `<span class="condition-badge ${cls}" title="${label}">${emoji}<span class="cond-label">${label}</span></span>`;
+    }).join('');
+
+    if (barCombat) barCombat.innerHTML = html;
+    if (badgesSheet) badgesSheet.innerHTML = html || '<span class="cond-none">—</span>';
+    if (sheetRow) sheetRow.style.display = state.conditions.length > 0 ? 'flex' : 'none';
+    _syncCsConditions();
+  }
+
+  function addCondition(raw) {
+    const key = _normalizeCondKey(raw);
+    if (state.conditions.includes(key)) return;
+    state.conditions.push(key);
+    lsSave('rpg_conditions', JSON.stringify(state.conditions));
+    renderConditions();
+    const def = CONDITION_DEFS[key];
+    addSystemMessage(`⚑ ${def?.emoji || ''} Condición: **${def?.label || raw}** aplicada.`);
+  }
+
+  function removeCondition(raw) {
+    const key = _normalizeCondKey(raw);
+    const idx = state.conditions.indexOf(key);
+    if (idx < 0) return;
+    state.conditions.splice(idx, 1);
+    lsSave('rpg_conditions', JSON.stringify(state.conditions));
+    renderConditions();
+    const def = CONDITION_DEFS[key];
+    addSystemMessage(`✓ ${def?.emoji || ''} Condición: **${def?.label || raw}** eliminada.`);
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // REPUTACIÓN CON FACCIONES
+  // ═══════════════════════════════════════════════════════
+  function _factionStatus(v) {
+    if (v >= 100) return { label: 'Leyenda',   cls: 'rep-legend',  desc: 'Puedes invocar sus soldados en combate' };
+    if (v >=  75) return { label: 'Héroe',     cls: 'rep-hero',    desc: 'Te reciben con honores, descuentos y favores' };
+    if (v >=  40) return { label: 'Aliado',    cls: 'rep-ally',    desc: 'Cuentan contigo, te ofrecen ayuda activa' };
+    if (v >=  10) return { label: 'Amistoso',  cls: 'rep-friend',  desc: 'Te tratan bien, acceso a servicios normales' };
+    if (v >= -10) return { label: 'Neutral',   cls: 'rep-neutral', desc: 'Sin relación especial, trato imparcial' };
+    if (v >= -40) return { label: 'Hostil',    cls: 'rep-hostile', desc: 'Desconfianza, precios altos o acceso denegado' };
+    if (v >= -75) return { label: 'Enemigo',   cls: 'rep-enemy',   desc: 'Atacan a la vista, tienen órdenes de captura' };
+    return               { label: 'Buscado',   cls: 'rep-enemy',   desc: 'Recompensa por tu cabeza, ataque inmediato' };
+  }
+
+  function renderFactions() {
+    const body  = $('factions-body');
+    const empty = $('factions-empty');
+    if (!body) return;
+
+    const entries = Object.values(state.factions);
+    if (entries.length === 0) {
+      if (empty) empty.style.display = 'block';
+      body.querySelectorAll('.faction-item').forEach(e => e.remove());
+      return;
+    }
+    if (empty) empty.style.display = 'none';
+    body.querySelectorAll('.faction-item').forEach(e => e.remove());
+
+    _updateSummonBtn();
+    entries.sort((a, b) => Math.abs(b.value) - Math.abs(a.value)).forEach(f => {
+      const status  = _factionStatus(f.value);
+      const halfPct = (Math.abs(f.value) / 100) * 50; // 0–50% de la mitad
+      const fillLeft  = f.value >= 0 ? 50 : (50 - halfPct);
+      const fillWidth = halfPct;
+      const item   = document.createElement('div');
+      item.className = 'faction-item';
+      item.innerHTML = `
+        <div class="faction-name-row">
+          <span class="faction-name">${escHtml(f.name)}</span>
+          <span class="faction-status ${status.cls}" title="${escHtml(status.desc)}">${status.label}</span>
+        </div>
+        <div class="faction-bar-track" title="${escHtml(status.desc)}">
+          <div class="faction-bar-fill ${status.cls}" style="left:${fillLeft.toFixed(1)}%;width:${fillWidth.toFixed(1)}%"></div>
+          <div class="faction-bar-mid"></div>
+        </div>
+        <div class="faction-rep-row">
+          <span class="faction-desc">${escHtml(status.desc)}</span>
+          <span class="faction-value">${f.value > 0 ? '+' : ''}${f.value} / 100</span>
+        </div>`;
+      body.appendChild(item);
+    });
+  }
+
+  function registerFaction(name) {
+    if (!name) return;
+    const key = name.toLowerCase().trim();
+    if (state.factions[key]) return; // ya existe, no sobreescribir
+    state.factions[key] = { name: name.trim(), value: 0 };
+    lsSave('rpg_factions', JSON.stringify(state.factions));
+    renderFactions();
+    _updateSummonBtn();
+    addSystemMessage(`⚜ Nueva facción registrada: ${name.trim()}`);
+  }
+
+  function updateFaction(name, delta) {
+    if (!name || isNaN(delta)) return;
+    const key = name.toLowerCase().trim();
+    if (!state.factions[key]) state.factions[key] = { name: name.trim(), value: 0 };
+    const prev = state.factions[key].value;
+    state.factions[key].value = Math.max(-100, Math.min(100, prev + delta));
+    lsSave('rpg_factions', JSON.stringify(state.factions));
+    renderFactions();
+    const arrow = delta > 0 ? '▲' : '▼';
+    const status = _factionStatus(state.factions[key].value);
+    addSystemMessage(`⚜ ${name}: ${arrow}${Math.abs(delta)} → ${status.label} (${state.factions[key].value > 0 ? '+' : ''}${state.factions[key].value})`);
+    _updateSummonBtn();
+  }
+
+  function _getSummonableFactions() {
+    return Object.values(state.factions).filter(f => f.value >= 100);
+  }
+
+  function _updateSummonBtn() {
+    const btn = $('summon-allies-btn');
+    if (!btn) return;
+    const eligible = _getSummonableFactions();
+    btn.style.display = (uiState.inCombat && eligible.length > 0) ? 'block' : 'none';
+  }
+
+  function _setCombatFocusMode(active) {
+    const screen    = $('combat-screen');
+    const inputSlot = $('cs-input-slot');
+    const chatPanel = document.querySelector('.panel-chat');
+    const inputArea = document.querySelector('.chat-input-area');
+
+    if (active) {
+      _populateCombatScreen();
+      if (inputArea && inputSlot && !inputSlot.contains(inputArea)) {
+        inputSlot.appendChild(inputArea);
+      }
+      screen?.classList.add('active');
+      screen?.setAttribute('aria-hidden', 'false');
+    } else {
+      if (inputArea && chatPanel && !chatPanel.contains(inputArea)) {
+        chatPanel.appendChild(inputArea);
+      }
+      screen?.classList.remove('active');
+      screen?.setAttribute('aria-hidden', 'true');
+      $('cs-death-overlay')?.classList.remove('visible');
+    }
+  }
+
+  function _populateCombatScreen() {
+    const playerName = $('char-name')?.value?.trim() || 'Aventurero';
+    const cur = Math.max(0, parseInt(hpCurrent?.value) || 0);
+    const max = Math.max(1, parseInt(hpMax?.value) || 1);
+    const pct = Math.min(100, Math.round((cur / max) * 100));
+
+    const csPlayerName   = $('cs-player-name');
+    const csPlayerFill   = $('cs-player-hp-fill');
+    const csPlayerText   = $('cs-player-hp-text');
+    const csPlayerAvatar = $('cs-player-avatar');
+
+    if (csPlayerName)   csPlayerName.textContent   = playerName;
+    if (csPlayerText)   csPlayerText.textContent   = `${cur} / ${max}`;
+    if (csPlayerFill) { csPlayerFill.style.width = pct + '%'; _csApplyHpColor(csPlayerFill, pct, false); }
+
+    const srcEl = $('player-avatar-img');
+    if (csPlayerAvatar && srcEl?.src) csPlayerAvatar.src = srcEl.src;
+
+    _syncCsConditions();
+
+    if (state.activeEnemy) {
+      const e = state.activeEnemy;
+      const csEnemyName   = $('cs-enemy-name');
+      const csEnemyFill   = $('cs-enemy-hp-fill');
+      const csEnemyText   = $('cs-enemy-hp-text');
+      const csEnemyAvatar = $('cs-enemy-avatar');
+      const eCur = e.hpCurrent ?? e.hpMax ?? 10;
+      const eMax = e.hpMax ?? 10;
+      const ePct = Math.min(100, Math.round((eCur / eMax) * 100));
+      if (csEnemyName)   csEnemyName.textContent   = e.name || '—';
+      if (csEnemyText)   csEnemyText.textContent   = `${eCur} / ${eMax}`;
+      if (csEnemyFill) { csEnemyFill.style.width = ePct + '%'; _csApplyHpColor(csEnemyFill, ePct, true); }
+      if (csEnemyAvatar && e.img) {
+        csEnemyAvatar.src = e.img;
+        csEnemyAvatar.onerror = () => { csEnemyAvatar.onerror = null; csEnemyAvatar.src = 'img/enemigos/goblin-1.png'; };
+      }
+    }
+
+    const loc = state.currentLocation?.name;
+    const csLoc = $('cs-location');
+    if (csLoc) csLoc.textContent = loc ? `📍 ${loc}` : '';
+
+    const msgs = $('cs-narration-messages');
+    if (msgs) msgs.innerHTML = '';
+  }
+
+  function _csApplyHpColor(fill, pct, isEnemy) {
+    if (pct > 60)      fill.style.background = isEnemy ? 'linear-gradient(90deg,#e74c3c,#c0392b)' : 'linear-gradient(90deg,#2ecc71,#27ae60)';
+    else if (pct > 25) fill.style.background = isEnemy ? 'linear-gradient(90deg,#f39c12,#e67e22)' : 'linear-gradient(90deg,#f1c40f,#f39c12)';
+    else               fill.style.background = isEnemy ? 'linear-gradient(90deg,#7d1010,#c0392b)' : 'linear-gradient(90deg,#b71c1c,#7d1010)';
+  }
+
+  function _syncCsConditions() {
+    const container = $('cs-conditions');
+    if (!container) return;
+    container.innerHTML = state.conditions.map(key => {
+      const def = CONDITION_DEFS[key];
+      return def ? `<span class="cs-condition-badge" title="${escHtml(def.label)}">${def.emoji || key}</span>` : '';
+    }).join('');
+  }
+
+  $('summon-allies-btn')?.addEventListener('click', () => {
+    const eligible = _getSummonableFactions();
+    if (!eligible.length) return;
+
+    if (eligible.length === 1) {
+      _invokeFactionAllies(eligible[0].name);
+      return;
+    }
+
+    // Múltiples facciones — mostrar mini-menú
+    const existing = $('summon-faction-menu');
+    if (existing) { existing.remove(); return; }
+
+    const menu = document.createElement('div');
+    menu.id = 'summon-faction-menu';
+    menu.className = 'summon-faction-menu';
+    eligible.forEach(f => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'summon-faction-option';
+      btn.textContent = f.name;
+      btn.addEventListener('click', () => { menu.remove(); _invokeFactionAllies(f.name); });
+      menu.appendChild(btn);
+    });
+    $('summon-allies-btn').insertAdjacentElement('afterend', menu);
+  });
+
+  function _invokeFactionAllies(factionName) {
+    const inp = $('user-input');
+    if (!inp) return;
+    inp.value = `Invoco a los aliados de ${factionName} para que me ayuden en este combate.`;
+    $('send-btn')?.click();
+  }
+
+  $('factions-toggle')?.addEventListener('click', () => {
+    const body = $('factions-body');
+    const btn  = $('factions-toggle');
+    if (!body || !btn) return;
+    const collapsed = body.classList.toggle('collapsed');
+    btn.textContent = collapsed ? '▶' : '▼';
+    btn.setAttribute('aria-expanded', String(!collapsed));
+  });
+
+  // ═══════════════════════════════════════════════════════
+  // NOTAS DEL JUGADOR
+  // ═══════════════════════════════════════════════════════
+  const playerNotesEl  = $('player-notes');
+  const notesCounterEl = $('notes-char-count');
+  let _notesSaveTimer  = null;
+
+  function _updateNotesCounter() {
+    if (notesCounterEl && playerNotesEl) {
+      notesCounterEl.textContent = playerNotesEl.value.length;
+    }
+  }
+
+  if (playerNotesEl) {
+    playerNotesEl.value = state.playerNotes;
+    _updateNotesCounter();
+    playerNotesEl.addEventListener('input', () => {
+      state.playerNotes = playerNotesEl.value;
+      _updateNotesCounter();
+      clearTimeout(_notesSaveTimer);
+      _notesSaveTimer = setTimeout(() => {
+        lsSave('rpg_player_notes', state.playerNotes);
+      }, 600);
+    });
+  }
+
+  $('notes-toggle')?.addEventListener('click', () => {
+    const body = $('notes-body');
+    const btn  = $('notes-toggle');
+    if (!body || !btn) return;
+    const collapsed = body.classList.toggle('collapsed');
+    btn.textContent = collapsed ? '▶' : '▼';
+    btn.setAttribute('aria-expanded', String(!collapsed));
+  });
+
+  // Evento: lista de hechizos conocidos (preparar / eliminar)
+  $('known-spells-list')?.addEventListener('click', e => {
+    const prepBtn = e.target.closest('.spell-prepare-btn');
+    const delBtn  = e.target.closest('.spell-del-btn');
+    if (prepBtn) prepareSpell(prepBtn.dataset.id);
+    if (delBtn) {
+      const spell = state.spells.find(s => s.id === delBtn.dataset.id);
+      if (spell) removeSpell(spell.name);
+    }
+  });
+
+  // Botón "Canalizar": rellena el input con el nombre del hechizo
+  $('cast-spell-btn')?.addEventListener('click', () => {
+    if (!state.preparedSpell) return;
+    const spell     = state.spells.find(s => s.name === state.preparedSpell);
+    const isCantrip = spell?.tipo === 'cantrip';
+    const prefix    = `Lanzo "${state.preparedSpell}" `;
+    const current   = playerInput?.value.trim() || '';
+    if (playerInput) { playerInput.value = current ? current + ' ' + prefix : prefix; playerInput.focus(); }
+    if (!isCantrip) addSystemMessage(`⚡ Canalizando "${state.preparedSpell}"...`);
+  });
+
+  // Botón "Descanso": recupera todos los slots
+  $('rest-spell-btn')?.addEventListener('click', restoreSpellSlots);
+
+  // ═══════════════════════════════════════════════════════
+  // TIENDA / MERCADER
+  // ═══════════════════════════════════════════════════════
+  function showShop(items) {
+    state.shopItems = items;
+    const list = $('shop-items-list');
+    const emptyEl = $('shop-empty');
+    if (!list) return;
+    list.querySelectorAll('.shop-item').forEach(e => e.remove());
+
+    if (emptyEl) emptyEl.style.display = items.length === 0 ? 'block' : 'none';
+
+    items.forEach(item => {
+      const canAfford = state.gold >= item.price;
+      const el = document.createElement('div');
+      el.className = `shop-item${canAfford ? '' : ' shop-item-broke'}`;
+      el.dataset.id = item.id;
+      const typeIcon = { arma:'⚔', armadura:'🛡', accesorio:'💍', consumible:'🧪', pocion:'🧪', herramienta:'🔧', magico:'✨', misc:'📦' }[item.tipo] || '📦';
+      el.innerHTML = `
+        <span class="shop-item-icon">${typeIcon}</span>
+        <div class="shop-item-info">
+          <span class="shop-item-name">${escHtml(item.name)}</span>
+          <span class="shop-item-price">🪙 ${item.price} mo</span>
+        </div>
+        <button type="button" class="shop-buy-btn" data-id="${escHtml(item.id)}" ${canAfford ? '' : 'disabled'} title="${canAfford ? 'Comprar' : 'Oro insuficiente'}">
+          ${canAfford ? 'Comprar' : 'Sin oro'}
+        </button>`;
+      list.appendChild(el);
+    });
+
+    const goldEl = $('shop-gold-display');
+    if (goldEl) goldEl.textContent = `${state.gold.toLocaleString('es')} mo`;
+
+    const overlay = $('shop-overlay');
+    if (overlay) { overlay.style.display = 'flex'; overlay.setAttribute('aria-hidden', 'false'); }
+  }
+
+  function hideShop() {
+    const overlay = $('shop-overlay');
+    if (overlay) { overlay.style.display = 'none'; overlay.setAttribute('aria-hidden', 'true'); }
+  }
+
+  function buyItem(itemId) {
+    const item = state.shopItems.find(i => i.id === itemId);
+    if (!item) return;
+    if (state.gold < item.price) { addSystemMessage('💸 No tienes suficiente oro.'); return; }
+    removeGold(item.price);
+    addInventoryItem(item.name);
+    state.shopItems = state.shopItems.filter(i => i.id !== itemId);
+    showShop(state.shopItems);
+  }
+
+  $('shop-overlay')?.addEventListener('click', e => {
+    if (e.target.id === 'shop-overlay' || e.target.closest('#shop-close')) hideShop();
+    const buyBtn = e.target.closest('.shop-buy-btn');
+    if (buyBtn) buyItem(buyBtn.dataset.id);
+  });
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && $('shop-overlay')?.style.display === 'flex') hideShop();
+  });
+
+  $('npc-shop-btn')?.addEventListener('click', () => {
+    if (state.isStreaming) return;
+    playerInput.value = '¿Qué tienes para vender?';
+    playerInput.dispatchEvent(new Event('input'));
+    sendBtn.click();
+  });
+
+  // ═══════════════════════════════════════════════════════
   // DIARIO DE MISIONES
   // ═══════════════════════════════════════════════════════
   function renderQuests() {
@@ -896,6 +1504,15 @@ document.addEventListener('DOMContentLoaded', () => {
     chatMessages.appendChild(el);
     scrollBottom();
     if (save) { state.chatLog.push({ type: 'player', content: text }); saveChatLog(); }
+    if (uiState.inCombat) {
+      const csEl = document.createElement('div');
+      csEl.className = 'cs-narration-msg cs-narration-player';
+      csEl.innerHTML = `
+        <div class="cs-msg-avatar">${escHtml(getCharInitials())}</div>
+        <div class="cs-msg-body"><p>${escHtml(text)}</p></div>`;
+      const msgs = $('cs-narration-messages');
+      if (msgs) { msgs.appendChild(csEl); msgs.scrollTop = msgs.scrollHeight; }
+    }
   }
 
   function addDmMessage(html, save = true) {
@@ -919,7 +1536,22 @@ document.addEventListener('DOMContentLoaded', () => {
       </div>`;
     chatMessages.appendChild(el);
     scrollBottom();
-    return el.querySelector('.dm-streaming');
+    const body = el.querySelector('.dm-streaming');
+    if (uiState.inCombat) {
+      const csEl = document.createElement('div');
+      csEl.className = 'cs-narration-msg cs-narration-dm';
+      csEl.innerHTML = `
+        <div class="cs-msg-avatar">DM</div>
+        <div class="cs-msg-body cs-streaming">
+          <span class="typing-dot"></span>
+          <span class="typing-dot"></span>
+          <span class="typing-dot"></span>
+        </div>`;
+      const msgs = $('cs-narration-messages');
+      if (msgs) { msgs.appendChild(csEl); msgs.scrollTop = msgs.scrollHeight; }
+      body._csMirror = csEl.querySelector('.cs-streaming');
+    }
+    return body;
   }
 
   function addSystemMessage(text, save = true) {
@@ -1040,8 +1672,14 @@ document.addEventListener('DOMContentLoaded', () => {
       localStorage.setItem('rpg_equipment',         JSON.stringify(state.equipment));
       localStorage.setItem('rpg_puntos_disponibles', String(state.puntosDisponibles));
       localStorage.setItem('rpg_gold', String(state.gold));
+      localStorage.setItem('rpg_spells', JSON.stringify(state.spells));
+      localStorage.setItem('rpg_prepared_spell', state.preparedSpell || '');
+      localStorage.setItem('rpg_spell_slots_used', String(state.spellSlotsUsed));
       if (state.pendingRoll) localStorage.setItem('rpg_pending_roll', JSON.stringify(state.pendingRoll));
       else                   localStorage.removeItem('rpg_pending_roll');
+      localStorage.setItem('rpg_conditions',   JSON.stringify(state.conditions));
+      localStorage.setItem('rpg_factions',     JSON.stringify(state.factions));
+      localStorage.setItem('rpg_player_notes', state.playerNotes);
     } catch { console.warn('localStorage lleno — estado del juego no guardado.'); }
   }
 
@@ -1083,6 +1721,13 @@ document.addEventListener('DOMContentLoaded', () => {
     catch(e) { state.equipment = { arma: null, armadura: null, accesorio: null }; }
     state.puntosDisponibles = parseInt(localStorage.getItem('rpg_puntos_disponibles') || '0') || 0;
     state.gold = parseInt(localStorage.getItem('rpg_gold') || '0') || 0;
+    try { state.spells = JSON.parse(localStorage.getItem('rpg_spells') || '[]'); } catch { state.spells = []; }
+    state.preparedSpell  = localStorage.getItem('rpg_prepared_spell') || null;
+    if (state.preparedSpell === '') state.preparedSpell = null;
+    state.spellSlotsUsed = parseInt(localStorage.getItem('rpg_spell_slots_used') || '0') || 0;
+    try { state.conditions    = JSON.parse(localStorage.getItem('rpg_conditions') || '[]'); }   catch { state.conditions = []; }
+    try { state.factions      = JSON.parse(localStorage.getItem('rpg_factions')   || '{}'); }   catch { state.factions = {}; }
+    state.playerNotes = localStorage.getItem('rpg_player_notes') || '';
     // Cargar puntos ASI — con migración automática desde saves antiguos
     try {
       const rawPS = localStorage.getItem('rpg_player_stats');
@@ -1356,6 +2001,71 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  // ── Config de clases mágicas ──────────────────────────────
+  const MAGIC_CLASS_SLUGS = new Set(['mago','clerigo','paladin','bardo','druida','hechicero','brujo']);
+
+  const CLASS_STARTING_SPELLS = {
+    'mago':      [
+      { name: 'Rayo de Escarcha',    tipo: 'cantrip' },
+      { name: 'Prestidigitación',    tipo: 'cantrip' },
+      { name: 'Proyectil Mágico',    tipo: 'nivel1'  },
+      { name: 'Dormir',              tipo: 'nivel1'  },
+      { name: 'Escudo Arcano',       tipo: 'nivel1'  },
+    ],
+    'clerigo':   [
+      { name: 'Guía',                tipo: 'cantrip' },
+      { name: 'Sagrado',             tipo: 'cantrip' },
+      { name: 'Curar Heridas',       tipo: 'nivel1'  },
+      { name: 'Bendición',           tipo: 'nivel1'  },
+      { name: 'Detectar el Mal',     tipo: 'nivel1'  },
+    ],
+    'paladin':   [
+      { name: 'Favor Divino',        tipo: 'nivel1'  },
+      { name: 'Escudo de la Fe',     tipo: 'nivel1'  },
+      { name: 'Curar Heridas',       tipo: 'nivel1'  },
+    ],
+    'bardo':     [
+      { name: 'Burla Viciosa',       tipo: 'cantrip' },
+      { name: 'Luz',                 tipo: 'cantrip' },
+      { name: 'Curar Heridas',       tipo: 'nivel1'  },
+      { name: 'Hechizar Persona',    tipo: 'nivel1'  },
+      { name: 'Detectar Magia',      tipo: 'nivel1'  },
+    ],
+    'druida':    [
+      { name: 'Druidismo',           tipo: 'cantrip' },
+      { name: 'Producir Llama',      tipo: 'cantrip' },
+      { name: 'Enredar',             tipo: 'nivel1'  },
+      { name: 'Curar Heridas',       tipo: 'nivel1'  },
+      { name: 'Hablar con Animales', tipo: 'nivel1'  },
+    ],
+    'hechicero': [
+      { name: 'Chispa de Fuego',     tipo: 'cantrip' },
+      { name: 'Rayo de Escarcha',    tipo: 'cantrip' },
+      { name: 'Manos Ardientes',     tipo: 'nivel1'  },
+      { name: 'Proyectil Mágico',    tipo: 'nivel1'  },
+      { name: 'Escudo Arcano',       tipo: 'nivel1'  },
+    ],
+    'brujo':     [
+      { name: 'Toque Escalofriante', tipo: 'cantrip' },
+      { name: 'Rayo Eldritch',       tipo: 'cantrip' },
+      { name: 'Maldición Hexed',     tipo: 'nivel1'  },
+      { name: 'Armadura de Ágathys', tipo: 'nivel1'  },
+      { name: 'Invocar Sombras',     tipo: 'nivel1'  },
+    ],
+  };
+
+  function getSpellSlotMax(className, level) {
+    const slug = _classSlug(className);
+    if (!MAGIC_CLASS_SLUGS.has(slug)) return 0;
+    if (slug === 'paladin') {
+      const tbl = [0,0,2,3,3,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4];
+      return tbl[Math.min(level, 20)];
+    }
+    if (slug === 'brujo') return Math.min(4, 1 + Math.floor((level - 1) / 4));
+    const tbl = [0,2,3,4,4,5,6,6,7,8,8,9,9,10,10,11,11,12,12,13,13];
+    return tbl[Math.min(level, 20)] || 2;
+  }
+
   function renderChatImage(prompt) {
     if (!prompt) return;
     // Visiones del chat ahora usan una imagen por defecto estática para evitar CORS
@@ -1374,6 +2084,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (type === 'inspect') uiState.isInspecting   = show;
 
     _syncChatCombatPadding();
+    _updateSummonBtn();
+    _setCombatFocusMode(uiState.inCombat);
 
     // ─ Battle panel (contenedor visible cuando hay alguna tarjeta activa) ─
     const bPanel = $('battle-panel');
@@ -1926,6 +2638,11 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // ─ NPCs ─────────────────────────────────────────────
+  const _SHOP_NPC_IDS = new Set(['mercader-oscuro', 'herrero', 'alquimista']);
+  function _isShopNpc(id) {
+    return _SHOP_NPC_IDS.has(id) || /mercader|herrero|alquimist|comerciant|tienda|vendedor/i.test(id || '');
+  }
+
   function showNpcCard(id) {
     const found = bestiario.npcs[id] ? { id, ...bestiario.npcs[id] } : lookupNpcByName(id);
     if (!found) { console.warn(`[Bestiario] NPC no encontrado: "${id}"`); return; }
@@ -1935,12 +2652,16 @@ document.addEventListener('DOMContentLoaded', () => {
     if (storedName) state.activeNpc.nombre = storedName;
     lsSave('rpg_active_npc', JSON.stringify(state.activeNpc));
     updateEntityUI('npc', state.activeNpc, true);
+    const shopBtn = $('npc-shop-btn');
+    if (shopBtn) shopBtn.style.display = _isShopNpc(found.id) ? 'block' : 'none';
   }
 
   function hideNpcCard() {
     state.activeNpc = null;
     localStorage.removeItem('rpg_active_npc');
     updateEntityUI('npc', null, false);
+    const shopBtn = $('npc-shop-btn');
+    if (shopBtn) shopBtn.style.display = 'none';
   }
 
   // ═══════════════════════════════════════════════════════
@@ -2032,7 +2753,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const pImg  = $('player-avatar-img');
 
     if (!pCard?.classList.contains('active')) {
-      setTimeout(handleGameOver, 400);
+      setTimeout(startDeathSaves, 400);
       return;
     }
 
@@ -2040,17 +2761,96 @@ document.addEventListener('DOMContentLoaded', () => {
 
     setTimeout(() => {
       pCard.classList.add('defeated');
-
-      // También inicia la animación de la tarjeta enemiga
       const rCard = $('enemy-card');
       if (rCard?.classList.contains('active')) rCard.classList.add('defeated');
-
       setTimeout(() => {
         if (pImg) { pImg.style.filter = ''; pImg.style.transition = ''; }
-        handleGameOver(); // limpia estado y muestra overlay
+        startDeathSaves();
       }, 650);
     }, 700);
   }
+
+  function startDeathSaves() {
+    state.deathSaves = { successes: 0, failures: 0, active: true };
+    saveGameState();
+    const panel = $('death-save-panel');
+    if (panel) { panel.classList.add('visible'); panel.setAttribute('aria-hidden', 'false'); }
+    renderDeathSaves();
+    addSystemMessage('💀 ¡HP a 0! Tiradas de muerte activas — 3 éxitos para estabilizarte, 3 fallos significa la muerte.');
+  }
+
+  function renderDeathSaves() {
+    ['success', 'failure'].forEach(type => {
+      const dots = $(`death-${type}-dots`);
+      if (!dots) return;
+      const count = type === 'success' ? state.deathSaves.successes : state.deathSaves.failures;
+      dots.querySelectorAll('.death-dot').forEach((dot, i) => {
+        dot.classList.toggle('filled', i < count);
+      });
+    });
+    const resultEl = $('death-save-result');
+    if (resultEl && !state.deathSaves.active) resultEl.textContent = '';
+  }
+
+  function rollDeathSave() {
+    if (!state.deathSaves.active || state.isStreaming) return;
+    const roll = rollD20();
+    const resultEl = $('death-save-result');
+
+    if (roll === 20) {
+      if (resultEl) resultEl.textContent = '⚡ ¡20 NATURAL! ¡Recuperas 1 HP!';
+      setTimeout(() => resolveDeathSaves('stable', true), 900);
+      return;
+    }
+
+    let { successes, failures } = state.deathSaves;
+    let msg = '';
+    if (roll === 1) {
+      failures = Math.min(3, failures + 2);
+      msg = `💀 PIFIA (1) — ¡Dos fallos! (${failures}/3)`;
+    } else if (roll >= 10) {
+      successes = Math.min(3, successes + 1);
+      msg = `✓ Éxito (${roll}) — ${successes}/3`;
+    } else {
+      failures = Math.min(3, failures + 1);
+      msg = `✗ Fallo (${roll}) — ${failures}/3`;
+    }
+
+    state.deathSaves.successes = successes;
+    state.deathSaves.failures  = failures;
+    saveGameState();
+    renderDeathSaves();
+    if (resultEl) resultEl.textContent = msg;
+    addRollToHistory('Tirada de Muerte', roll, 0, roll);
+
+    if (failures >= 3) setTimeout(() => resolveDeathSaves('dead'), 1200);
+    else if (successes >= 3) setTimeout(() => resolveDeathSaves('stable'), 1200);
+  }
+
+  function resolveDeathSaves(outcome, critRecovery = false) {
+    state.deathSaves.active = false;
+    saveGameState();
+    const panel = $('death-save-panel');
+    if (panel) { panel.classList.remove('visible'); panel.setAttribute('aria-hidden', 'true'); }
+
+    if (outcome === 'dead') {
+      addSystemMessage('💀 Tres fallos — el aventurero ha muerto.');
+      handleGameOver();
+    } else {
+      hpCurrent.value = 1;
+      lsSave('rpg_hp-current', '1');
+      updateHpBar();
+      state.deathSaves = { successes: 0, failures: 0, active: false };
+      saveGameState();
+      const msg = critRecovery
+        ? '⚡ ¡20 natural! El aventurero se recupera milagrosamente con 1 HP.'
+        : '✓ ¡Estabilizado! El aventurero respira con 1 HP.';
+      addSystemMessage(msg);
+      callDM(msg);
+    }
+  }
+
+  $('death-save-roll-btn')?.addEventListener('click', rollDeathSave);
 
   // ═══════════════════════════════════════════════════════
   // PROGRESIÓN — XP, nivel, competencia
@@ -2175,6 +2975,7 @@ document.addEventListener('DOMContentLoaded', () => {
     updateHpBar();
     updateSkillBonuses();
     updatePlayerAvatar();
+    renderSpellSlots();
     showLevelUpToast(next, hpGained);
 
     const nextAsi = [...ASI_LEVELS].sort((a, b) => a - b).find(l => l > next) ?? '—';
@@ -2202,6 +3003,15 @@ document.addEventListener('DOMContentLoaded', () => {
     if (banner)  banner.classList.toggle('visible', activo);
     if (statsEl) statsEl.classList.toggle('stat-allocating', activo);
     btns.forEach(b => { b.style.display = activo ? 'inline-flex' : 'none'; });
+    // Auto-expandir atributos cuando hay puntos por distribuir
+    if (activo) {
+      const statsBody = $('stats-body');
+      const statsBtn  = $('stats-toggle');
+      if (statsBody?.classList.contains('collapsed')) {
+        statsBody.classList.remove('collapsed');
+        if (statsBtn) { statsBtn.textContent = '▼'; statsBtn.setAttribute('aria-expanded', 'true'); }
+      }
+    }
     lsSave('rpg_puntos_disponibles', String(state.puntosDisponibles));
   }
 
@@ -2285,12 +3095,46 @@ Misiones activas: ${activeQuests}
 === RESUMEN / MEMORIA DE HISTORIA ===
 ${sum}`;
 
+    if (isMagicClass(cls) && state.spells.length > 0) {
+      const lvl   = parseInt($('char-level')?.value) || 1;
+      const total = getSpellSlotMax(cls, lvl);
+      const avail = Math.max(0, total - state.spellSlotsUsed);
+      const cantripList = state.spells.filter(s => s.tipo === 'cantrip').map(s => s.name).join(', ') || 'Ninguno';
+      const hechizos    = state.spells.filter(s => s.tipo !== 'cantrip').map(s => s.name).join(', ') || 'Ninguno';
+      block += `\n\n=== MAGIA ===
+Trucos (sin límite): ${cantripList}
+Hechizos conocidos: ${hechizos}
+Slots disponibles: ${avail}/${total}
+Hechizo preparado: ${state.preparedSpell || 'Ninguno'}
+REGLA: Usa [SPELL_USED] cuando el personaje lanza un hechizo que consume un slot. Usa [RESTORE_SPELLS] después de un descanso largo${cls.toLowerCase() === 'Brujo' ? ' o corto' : ''}.`;
+    }
+
     if (state.activeEnemy) {
-      const e = state.activeEnemy;
+      const e   = state.activeEnemy;
+      const ca  = e.ca   ?? '?';
+      const hp  = e.hpCurrent ?? e.hpMax ?? '?';
+      const hpM = e.hpMax ?? '?';
+      const dmg = e.dano  ?? '1d6';
       block += `\n\n=== COMBATE ACTIVO ===
-Enemigo: ${e.name}${e.ca ? ` | CA: ${e.ca}` : ''}${e.dano ? ` | Daño: ${e.dano}` : ''}
-HP Enemigo: ${e.hpCurrent ?? e.hpMax ?? '?'} / ${e.hpMax ?? '?'}
-IMPORTANTE: Usa [ENEMY_LOSE_HP: N] cada vez que el jugador infliga daño al enemigo. Cuando el enemigo llega a 0 HP, usa [ENEMY_DEFEATED].`;
+Enemigo: ${e.name} | HP: ${hp}/${hpM} | CA: ${ca} | Daño por ataque: ${dmg}
+
+PROTOCOLO DE COMBATE — SIGUE ESTOS PASOS EN ORDEN:
+
+TURNO DEL JUGADOR (cuando intente atacar o usar habilidad ofensiva):
+  PASO 1 → Emite [REQUEST_ROLL: Fuerza] (o el atributo relevante) y PARA aquí.
+           NO narres el resultado. NO calcules el dado. Espera la tirada del jugador.
+  PASO 2 → Cuando el jugador envíe su tirada (ej: "🎲 Tirada de Fuerza: 14 + 2 = 16"):
+           • Si total ≥ CA (${ca}): impacta → narra el golpe → calcula daño con ${dmg} → [ENEMY_LOSE_HP: N]
+           • Si total < CA (${ca}): falla → narra el fallo → NO emitas [ENEMY_LOSE_HP]
+  PASO 3 → Si HP enemigo queda ≤ 0 tras el daño: [ENEMY_DEFEATED] + [GAIN_XP: 75–150]
+
+TURNO DEL ENEMIGO (después de resolver el ataque del jugador, si sigue vivo):
+  → Narra el contraataque del ${e.name} → tira ${dmg} mentalmente → [LOSE_HP: N]
+
+REGLAS ABSOLUTAS:
+  • NUNCA calcules la tirada del jugador tú mismo
+  • NUNCA combines PASO 1 y PASO 2 en el mismo mensaje
+  • El jugador DEBE lanzar el dado físicamente antes de saber si impactó`;
     }
 
     if (state.activeNpc) {
@@ -2306,6 +3150,25 @@ ${campaignName
   ? `El jugador ya conoce a este NPC en "${locDisplay || 'esta ubicación'}" — su nombre es "${campaignName}". Úsalo con naturalidad. NO uses [NPC_NAME].`
   : `REGLA DE IDENTIDAD: Este NPC no tiene nombre registrado en "${locDisplay || 'esta ubicación'}". Los NPCs del mismo tipo son personas distintas en cada ciudad. Genera un nombre único para el "${n.nombre}" de ${locDisplay ? `"${locDisplay}"` : 'aquí'} y registralo con [NPC_NAME: ${n.id}|Nombre].`}
 IMPORTANTE: Interpreta a este personaje con coherencia total a su personalidad y rango social. Su nivel de autoridad determina cómo trata al jugador y qué puede ofrecerle o negarle. Usa [END_CONVERSATION] cuando el diálogo concluya de forma natural.`;
+    }
+
+    if (state.conditions.length > 0) {
+      block += '\n\n=== CONDICIONES ACTIVAS DEL JUGADOR ===\n';
+      block += state.conditions.map(key => {
+        const def = CONDITION_DEFS[key];
+        return `${def?.emoji || '⚑'} ${def?.label || key}`;
+      }).join(', ');
+      block += '\nREGLA: Estas condiciones afectan activamente lo que el personaje puede hacer. Un jugador paralizado no puede actuar. Uno envenenado sufre daño periódico. Uno cegado tiene desventaja en ataques. Narra las consecuencias con coherencia.';
+    }
+
+    const _significantFactions = Object.values(state.factions).filter(f => Math.abs(f.value) >= 10);
+    if (_significantFactions.length > 0) {
+      block += '\n\n=== REPUTACIÓN CON FACCIONES ===\n';
+      block += _significantFactions.map(f => {
+        const s = _factionStatus(f.value);
+        return `${f.name}: ${f.value > 0 ? '+' : ''}${f.value} (${s.label})`;
+      }).join('\n');
+      block += '\nREGLA: Los NPCs de facciones con reputación negativa tratan al jugador con hostilidad. Con reputación positiva ofrecen descuentos, favores e información privilegiada. Un "Enemigo" puede atacar al jugador a la vista. Un "Héroe" es recibido con honor.';
     }
 
     const _worldEntries = Object.entries(state.worldState);
@@ -2461,12 +3324,22 @@ IMPORTANTE: Interpreta a este personaje con coherencia total a su personalidad y
   // PARSEO DE ETIQUETAS — 10 etiquetas reconocidas
   // ═══════════════════════════════════════════════════════
   function parseDmTags(text) {
-    let totalXP = 0, hpDelta = 0, enemyHpDelta = 0, goldDelta = 0, rollAttr = null, diaryEntry = null, imagePrompt = null;
+    // Normalizar etiquetas que el modelo emite sin corchetes (ej: "ENEMY_DEFEATED" → "[ENEMY_DEFEATED]")
+    text = text
+      .replace(/(?<!\[)\b(ENEMY_DEFEATED|END_CONVERSATION|END_COMBAT|SPELL_USED|RESTORE_SPELLS)\b(?!\])/g, '[$1]')
+      .replace(/(?<!\[)\b(GAIN_XP|LOSE_HP|GAIN_HP|ENEMY_LOSE_HP|ADD_ITEM|REMOVE_ITEM|ADD_GOLD|REMOVE_GOLD|REQUEST_ROLL|ENEMY_CARD|NPC_CARD|ADD_QUEST|COMPLETE_QUEST|UPDATE_DIARY|GENERATE_IMAGE|SET_LOCATION|NPC_NAME|NPC_MEMO|LOCATION_MEMO|MORAL_NOTE|UPDATE_WORLD|COMPRESS_DIARY|ADD_SPELL|REMOVE_SPELL|OPEN_SHOP|ADD_CONDITION|REMOVE_CONDITION|FACTION_REP|FACTION_INTRO):\s*([^\n\[]{1,300})/g, '[$1: $2]');
+
+    let totalXP = 0, hpDelta = 0, enemyHpDelta = 0, goldDelta = 0, rollAttr = null, rollMode = 'normal', diaryEntry = null, imagePrompt = null;
     const enemyCardList = []; let enemyDefeated = false, npcCardId = null, npcName = null, setLocation = null, endConversation = false, combatEnded = false, compressedDiary = null;
     const worldUpdates = [];
     const itemsToAdd = [], itemsToRemove = [];
     const questsToAdd = [], questsToComplete = [];
     const npcMemos = [], locationMemos = [], moralNotes = [];
+    const spellsToAdd = [], spellsToRemove = [];
+    let spellUsed = false, restoreSpells = false;
+    let shopData = null;
+    const conditionsToAdd = [], conditionsToRemove = [];
+    const factionUpdates = [], factionIntros = [];
 
     const cleaned = text
       .replace(/\[GAIN_XP:\s*(\d+)\s*\]/gi, (_, n) => {
@@ -2489,8 +3362,13 @@ IMPORTANTE: Interpreta a este personaje con coherencia total a su personalidad y
         if (v >= 1 && v <= 9999) enemyHpDelta += v;
         return '';
       })
-      .replace(/\[REQUEST_ROLL:\s*([^\]]+)\]/gi, (_, attr) => {
-        if (!rollAttr) rollAttr = attr.trim();
+      .replace(/\[REQUEST_ROLL:\s*([^\]]+)\]/gi, (_, raw) => {
+        if (!rollAttr) {
+          const parts = raw.split('|');
+          rollAttr = parts[0].trim();
+          const m = (parts[1] || '').trim().toLowerCase();
+          rollMode = (m === 'ventaja' || m === 'desventaja') ? m : 'normal';
+        }
         return '';
       })
       .replace(/\[ADD_ITEM:\s*([^\]]+)\]/gi, (_, name) => {
@@ -2559,6 +3437,28 @@ IMPORTANTE: Interpreta a este personaje con coherencia total a su personalidad y
         const s = summary.trim(); if (s) compressedDiary = s;
         return '';
       })
+      .replace(/\[ADD_SPELL:\s*([^|\]]+)\|?([^\]]*)\]/gi, (_, name, tipo) => {
+        const n = name.trim();
+        const t = (tipo.trim() || 'nivel1').toLowerCase();
+        if (n) spellsToAdd.push({ name: n, tipo: t === 'cantrip' ? 'cantrip' : 'nivel1' });
+        return '';
+      })
+      .replace(/\[REMOVE_SPELL:\s*([^\]]+)\]/gi, (_, name) => {
+        const n = name.trim(); if (n) spellsToRemove.push(n); return '';
+      })
+      .replace(/\[SPELL_USED\]/gi, () => { spellUsed = true; return ''; })
+      .replace(/\[RESTORE_SPELLS\]/gi, () => { restoreSpells = true; return ''; })
+      .replace(/\[OPEN_SHOP:\s*([^\]]+)\]/gi, (_, raw) => {
+        const items = raw.split(';').map(s => s.trim()).filter(Boolean).map(entry => {
+          const [name, priceStr, tipo] = entry.split('|').map(p => p.trim());
+          if (!name) return null;
+          const price = Math.max(1, parseInt(priceStr) || 10);
+          const t = (tipo || 'misc').toLowerCase();
+          return { id: 'shop_' + Date.now() + '_' + Math.random().toString(36).slice(2, 4), name, price, tipo: ['arma','armadura','accesorio','consumible','pocion','herramienta','magico','misc'].includes(t) ? t : 'misc' };
+        }).filter(Boolean);
+        if (items.length) shopData = items;
+        return '';
+      })
       .replace(/\[ADD_GOLD:\s*(\d+)\s*\]/gi, (_, n) => {
         const v = parseInt(n, 10);
         if (v >= 1) goldDelta += v;
@@ -2569,9 +3469,23 @@ IMPORTANTE: Interpreta a este personaje con coherencia total a su personalidad y
         if (v >= 1) goldDelta -= v;
         return '';
       })
+      .replace(/\[ADD_CONDITION:\s*([^\]]+)\]/gi, (_, name) => {
+        const n = name.trim(); if (n) conditionsToAdd.push(n); return '';
+      })
+      .replace(/\[REMOVE_CONDITION:\s*([^\]]+)\]/gi, (_, name) => {
+        const n = name.trim(); if (n) conditionsToRemove.push(n); return '';
+      })
+      .replace(/\[FACTION_REP:\s*([^|\]]+)\|([^\]]+)\]/gi, (_, name, delta) => {
+        const d = parseInt(String(delta).replace(/[^-\d]/g, ''), 10);
+        if (name.trim() && !isNaN(d)) factionUpdates.push({ name: name.trim(), delta: d });
+        return '';
+      })
+      .replace(/\[FACTION_INTRO:\s*([^\]]+)\]/gi, (_, name) => {
+        const n = name.trim(); if (n) factionIntros.push(n); return '';
+      })
       .trim();
 
-    return { cleaned, totalXP, hpDelta, enemyHpDelta, goldDelta, rollAttr, diaryEntry, imagePrompt, enemyCardList, enemyDefeated, npcCardId, npcName, setLocation, worldUpdates, endConversation, combatEnded, compressedDiary, npcMemos, locationMemos, moralNotes, itemsToAdd, itemsToRemove, questsToAdd, questsToComplete };
+    return { cleaned, totalXP, hpDelta, enemyHpDelta, goldDelta, rollAttr, rollMode, diaryEntry, imagePrompt, enemyCardList, enemyDefeated, npcCardId, npcName, setLocation, worldUpdates, endConversation, combatEnded, compressedDiary, npcMemos, locationMemos, moralNotes, itemsToAdd, itemsToRemove, questsToAdd, questsToComplete, spellsToAdd, spellsToRemove, spellUsed, restoreSpells, shopData, conditionsToAdd, conditionsToRemove, factionUpdates, factionIntros };
   }
 
   function applyXpGain(amount) {
@@ -2629,7 +3543,11 @@ IMPORTANTE: Interpreta a este personaje con coherencia total a su personalidad y
     const _dmCls     = $('char-class').value.trim() || state.charClass || 'aventurero';
     const systemText = isOoc
       ? `ATENCIÓN — MODO DESARROLLADOR ACTIVO: Sal por completo de tu rol de Dungeon Master. No narres, no pidas tiradas de dados, no uses ninguna etiqueta del sistema de juego ([GAIN_XP], [LOSE_HP], [GAIN_HP], [REQUEST_ROLL], [ADD_ITEM], [REMOVE_ITEM], [ADD_QUEST], [COMPLETE_QUEST]). Responde de forma directa, técnica y transparente como una IA asistente respondiendo al desarrollador. Sé conciso y claro. El idioma de tu respuesta debe coincidir con el del mensaje que recibes.`
-      : `${buildDmCore(_dmName, _dmCls)}\n\n=== INSTRUCCIONES DEL MUNDO / LORE ===\n${loreText}\n\n${buildCharBlock()}\n\n=== RECORDATORIO FINAL ANTES DE RESPONDER ===\nAntes de cerrar tu respuesta, comprueba: ¿has incluido [GAIN_XP]? Solo es válido si en este turno el jugador ha derrotado un enemigo o cerrado un hito narrativo. Si tu narración no describe esa victoria, elimina la etiqueta. La coherencia entre texto y etiquetas es obligatoria.`;
+      : `${buildDmCore(_dmName, _dmCls)}\n\n=== INSTRUCCIONES DEL MUNDO / LORE ===\n${loreText}\n\n${buildCharBlock()}\n\n=== RECORDATORIO FINAL ANTES DE RESPONDER ===\n${
+  uiState.inCombat
+    ? `ESTÁS EN COMBATE. Antes de responder, comprueba:\n1. ¿El jugador acaba de enviar su tirada? → compara con la CA del enemigo (ver bloque COMBATE ACTIVO arriba) y aplica daño con [ENEMY_LOSE_HP: N].\n2. ¿El jugador acaba de pedir atacar pero NO ha tirado aún? → responde SOLO con [REQUEST_ROLL: Fuerza] (o atributo relevante). Nada más.\n3. ¿El enemigo llega a 0 HP? → [ENEMY_DEFEATED] + [GAIN_XP: N].\n4. ¿Has calculado tú la tirada del jugador? → BORRA ese cálculo. El jugador LANZA el dado.`
+    : `Comprueba: ¿has incluido [GAIN_XP]? Solo es válido si en este turno el jugador ha derrotado un enemigo o cerrado un hito narrativo. Si tu narración no describe esa victoria, elimina la etiqueta.`
+}\nLa coherencia entre texto y etiquetas es obligatoria.`;
 
     setDmState('thinking');
     const dmBody = createDmStreamMessage();
@@ -2652,17 +3570,26 @@ IMPORTANTE: Interpreta a este personaje con coherencia total a su personalidad y
       // Modo normal: parsear etiquetas y aplicar mecánicas
       const {
         cleaned: displayText,
-        totalXP, hpDelta, enemyHpDelta, goldDelta, rollAttr, diaryEntry, imagePrompt,
+        totalXP, hpDelta, enemyHpDelta, goldDelta, rollAttr, rollMode, diaryEntry, imagePrompt,
         enemyCardList, enemyDefeated, npcCardId, npcName, setLocation, worldUpdates, endConversation, combatEnded, compressedDiary,
         npcMemos, locationMemos, moralNotes,
         itemsToAdd, itemsToRemove,
         questsToAdd, questsToComplete,
+        spellsToAdd, spellsToRemove, spellUsed, restoreSpells,
+        shopData,
+        conditionsToAdd, conditionsToRemove, factionUpdates, factionIntros,
       } = parseDmTags(fullText);
 
       // El streaming ya mostró el texto char-a-char; solo aplicar HTML formateado
       if (_completeTypewriter) { _completeTypewriter(); }
       const finalHtml = mdToHtml(displayText);
       dmBody.innerHTML = finalHtml;
+      if (dmBody._csMirror) {
+        dmBody._csMirror.className = 'cs-msg-body';
+        dmBody._csMirror.innerHTML = finalHtml;
+        const csMsgs = $('cs-narration-messages');
+        if (csMsgs) csMsgs.scrollTop = csMsgs.scrollHeight;
+      }
       scrollBottom();
 
       state.history.push({ role: 'assistant', content: displayText });
@@ -2701,7 +3628,7 @@ IMPORTANTE: Interpreta a este personaje con coherencia total a su personalidad y
       if (hpDelta !== 0) applyHpChange(hpDelta);
       if (goldDelta > 0) addGold(goldDelta);
       else if (goldDelta < 0) removeGold(-goldDelta);
-      if (rollAttr)      activatePendingRoll(rollAttr);
+      if (rollAttr)      activatePendingRoll(rollAttr, rollMode);
 
       // Daño infligido al enemigo → actualizar barra de HP
       if (enemyHpDelta > 0 && state.activeEnemy) {
@@ -2714,6 +3641,15 @@ IMPORTANTE: Interpreta a este personaje con coherencia total a su personalidad y
       itemsToRemove.forEach(name  => removeInventoryItem(name));
       questsToAdd.forEach(title   => addQuest(title));
       questsToComplete.forEach(title => completeQuest(title));
+      spellsToAdd.forEach(({ name, tipo }) => addSpell(name, tipo));
+      spellsToRemove.forEach(name => removeSpell(name));
+      if (spellUsed)     useSpellSlot();
+      if (restoreSpells) restoreSpellSlots();
+      if (shopData)      showShop(shopData);
+      conditionsToAdd.forEach(name    => addCondition(name));
+      conditionsToRemove.forEach(name => removeCondition(name));
+      factionIntros.forEach(name      => registerFaction(name));
+      factionUpdates.forEach(({ name, delta }) => updateFaction(name, delta));
 
       // Ubicación — actualizar ANTES de mostrar tarjetas de NPC (orden crítico)
       if (setLocation) _setCurrentLocation(setLocation.toLowerCase().trim(), setLocation.trim());
@@ -2912,6 +3848,15 @@ IMPORTANTE: Interpreta a este personaje con coherencia total a su personalidad y
       state.campaignDiary = ''; state.activeNpc = null; state.activeEnemy = null;
       state.npcLog = {}; state.locationLog = {}; state.moralLog = [];
       state.playerStats = { str:0, dex:0, con:0, int:0, wis:0, cha:0 };
+      state.gold = 0; state.spells = []; state.preparedSpell = null; state.spellSlotsUsed = 0;
+      state.shopItems = [];
+      state.conditions = []; state.factions = {};
+      localStorage.removeItem('rpg_conditions'); localStorage.removeItem('rpg_factions');
+      // Hechizos iniciales según clase
+      (CLASS_STARTING_SPELLS[_classSlug(cls)] || []).forEach(({ name, tipo }) => {
+        const id = 'spell_' + Date.now() + '_' + Math.random().toString(36).slice(2, 5);
+        state.spells.push({ id, name, tipo });
+      });
       uiState.inCombat = false; uiState.inConversation = false; uiState.isInspecting = false;
       $('chat-messages')?.classList.remove('has-combat-ui');
       localStorage.removeItem('rpg_active_enemy'); localStorage.removeItem('rpg_active_npc');
@@ -2923,7 +3868,7 @@ IMPORTANTE: Interpreta a este personaje con coherencia total a su personalidad y
       if (_newPanel)  { _newPanel.classList.remove('active'); _newPanel.setAttribute('aria-hidden','true'); }
       _hideGameOverOverlay?.();
       saveChatLog(); saveGameState();
-      renderInventory(); renderEquipment(); renderQuests(); renderGold();
+      renderInventory(); renderEquipment(); renderQuests(); renderGold(); renderSpells(); renderSpells();
 
       addSystemMessage(`✦ ${name} el/la ${cls} comienza su aventura. ¡Que los dioses te acompañen!`);
     });
@@ -3025,7 +3970,7 @@ IMPORTANTE: Interpreta a este personaje con coherencia total a su personalidad y
       else el.value = '';
       if (id === 'char-name' || id === 'char-class') el.removeAttribute('readonly');
     });
-    renderInventory(); renderEquipment(); renderQuests(); renderGold();
+    renderInventory(); renderEquipment(); renderQuests(); renderGold(); renderSpells();
     updateHpBar(); updateXpBar();
     ['str','dex','con','int','wis','cha'].forEach(updateMod);
     updateSkillBonuses(); setDmState('ready');
@@ -3080,7 +4025,10 @@ IMPORTANTE: Interpreta a este personaje con coherencia total a su personalidad y
         if (id === 'char-name' || id === 'char-class') el.removeAttribute('readonly');
       });
 
-      renderInventory(); renderEquipment(); renderQuests(); renderGold();
+      state.conditions = []; state.factions = {}; state.playerNotes = '';
+      if (playerNotesEl) { playerNotesEl.value = ''; _updateNotesCounter(); }
+      renderInventory(); renderEquipment(); renderQuests(); renderGold(); renderSpells();
+      renderConditions(); renderFactions();
       updateHpBar(); updateXpBar();
       ['str', 'dex', 'con', 'int', 'wis', 'cha'].forEach(updateMod);
       updateSkillBonuses(); _syncModoASI(); setDmState('ready');
@@ -3206,7 +4154,7 @@ IMPORTANTE: Interpreta a este personaje con coherencia total a su personalidad y
           renderChatLog(state.chatLog);
           renderInventory(); syncInventoryTextarea();
           renderQuests(); renderGold();
-          if (state.pendingRoll) activatePendingRoll(state.pendingRoll.label);
+          if (state.pendingRoll) activatePendingRoll(state.pendingRoll.label, state.pendingRoll.mode || 'normal');
           syncStatDisplays(); // Recalcular stats desde clase + puntos ASI importados
           updateHpBar(); updateXpBar(); updateStats();
 
@@ -3232,16 +4180,25 @@ IMPORTANTE: Interpreta a este personaje con coherencia total a su personalidad y
   }
 
   // ═══════════════════════════════════════════════════════
+  // TOGGLE ATRIBUTOS
+  // ═══════════════════════════════════════════════════════
+  $('stats-toggle')?.addEventListener('click', () => {
+    const body = $('stats-body');
+    const btn  = $('stats-toggle');
+    if (!body || !btn) return;
+    const collapsed = body.classList.toggle('collapsed');
+    btn.textContent = collapsed ? '▶' : '▼';
+    btn.setAttribute('aria-expanded', String(!collapsed));
+    // Si hay puntos por distribuir, expandir automáticamente
+    if (!collapsed && state.puntosDisponibles > 0) _syncModoASI();
+  });
+
+  // ═══════════════════════════════════════════════════════
   // TOGGLE HABILIDADES
   // ═══════════════════════════════════════════════════════
   const skillsToggle = $('skills-toggle');
   const skillsBody   = $('skills-body');
   if (skillsToggle && skillsBody) {
-    if (window.innerWidth < 768) {
-      skillsBody.classList.add('collapsed');
-      skillsToggle.textContent = '▶';
-      skillsToggle.setAttribute('aria-expanded', 'false');
-    }
     skillsToggle.addEventListener('click', () => {
       const collapsed = skillsBody.classList.toggle('collapsed');
       skillsToggle.textContent = collapsed ? '▶' : '▼';
@@ -3294,6 +4251,13 @@ IMPORTANTE: Interpreta a este personaje con coherencia total a su personalidad y
     syncInventoryTextarea();
     renderQuests();
     renderGold();
+    renderSpells();
+    renderConditions();
+    renderFactions();
+    if (playerNotesEl && state.playerNotes) {
+      playerNotesEl.value = state.playerNotes;
+      _updateNotesCounter();
+    }
 
     // Cargar historial de tiradas
     try { state.rollHistory = JSON.parse(localStorage.getItem('rpg_roll_history') || '[]'); } catch(e) { state.rollHistory = []; }

@@ -7,7 +7,8 @@
       "Bash(Select-Object FullName, Extension, Length)",
       "Bash(Sort-Object FullName)",
       "Bash(grep -E \"\\\\.\\(html|js|css|json|png|svg\\)$\")",
-      "Bash(git merge *)"
+      "Bash(git merge *)",
+      "Bash(del \"c:\\\\Users\\\\77190035B\\\\Desktop\\\\Ismael\\\\dev\\\\DD\\\\src\\\\map-engine.js\")"
     ]
   }
 }
