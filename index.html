@@ -545,14 +545,19 @@
         <span class="cs-topbar-title">⚔ COMBATE</span>
         <span class="cs-location" id="cs-location"></span>
       </div>
-      <button type="button" class="cs-close-btn" id="cs-close-btn" title="Salir de la pantalla de combate">✕</button>
+      <div class="cs-topbar-actions">
+        <button type="button" class="cs-escape-btn" id="cs-escape-btn" title="Intentar escapar del combate (tirada de Destreza)">🏃 Escapar</button>
+        <button type="button" class="cs-close-btn" id="cs-close-btn" title="Forzar cierre (sin tirada)">✕</button>
+      </div>
     </div>
 
     <div class="cs-cards-row">
+      <!-- Jugador -->
       <div class="cs-entity cs-entity-player">
         <div class="cs-entity-name" id="cs-player-name">Tú</div>
-        <div class="cs-avatar-frame">
+        <div class="cs-avatar-frame cs-avatar-clickable" id="cs-player-avatar-frame" title="Ver estadísticas">
           <img class="cs-avatar-img" id="cs-player-avatar" src="img/protagonistas/guerrero_base.png" alt="Avatar jugador" />
+          <div class="cs-avatar-hint">📊</div>
         </div>
         <div class="cs-hp-row">
           <div class="cs-hp-track">
@@ -567,10 +572,12 @@
         <span class="cs-vs-text">⚔</span>
       </div>
 
+      <!-- Enemigo -->
       <div class="cs-entity cs-entity-enemy">
         <div class="cs-entity-name" id="cs-enemy-name">—</div>
-        <div class="cs-avatar-frame cs-avatar-frame-enemy">
+        <div class="cs-avatar-frame cs-avatar-frame-enemy cs-avatar-clickable" id="cs-enemy-avatar-frame" title="Ver ficha del enemigo">
           <img class="cs-avatar-img" id="cs-enemy-avatar" src="img/enemigos/goblin-1.png" alt="Avatar enemigo" />
+          <div class="cs-avatar-hint">📋</div>
           <div class="cs-death-overlay" id="cs-death-overlay" aria-hidden="true"><span>✕</span></div>
         </div>
         <div class="cs-hp-row">
@@ -579,6 +586,8 @@
           </div>
           <span class="cs-hp-text" id="cs-enemy-hp-text">—</span>
         </div>
+        <!-- Cola de enemigos esperando -->
+        <div class="cs-enemy-queue" id="cs-enemy-queue" style="display:none"></div>
       </div>
     </div>
 
@@ -587,6 +596,15 @@
     </div>
 
     <div class="cs-input-slot" id="cs-input-slot"></div>
+
+    <!-- Popup de estadísticas del jugador (CS-interno) -->
+    <div class="cs-stats-popup" id="cs-player-stats-popup" aria-hidden="true">
+      <button type="button" class="cs-stats-close" id="cs-stats-close">✕</button>
+      <div class="cs-stats-content" id="cs-stats-content"></div>
+    </div>
+
+    <!-- Overlay escape roll feedback -->
+    <div class="cs-escape-result" id="cs-escape-result" aria-live="assertive"></div>
 
   </div>
 

@@ -3566,7 +3566,7 @@ input[type="number"] {
   justify-content: center;
   gap: 22px;
   padding: 20px 16px;
-  z-index: 1500;
+  z-index: 6000;
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.28s ease;
@@ -6635,6 +6635,242 @@ body.theme-parchment .player-card.active:hover::after { color: rgba(40, 80, 180,
 
 .cs-input-slot .chat-input-area::before { display: none; }
 
+/* — Topbar actions — */
+.cs-topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.cs-escape-btn {
+  background: rgba(255, 165, 0, 0.1);
+  border: 1px solid rgba(255, 165, 0, 0.35);
+  border-radius: var(--radius, 6px);
+  padding: 0.3rem 0.65rem;
+  color: rgba(255, 200, 80, 0.85);
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s, border-color 0.2s;
+  white-space: nowrap;
+}
+.cs-escape-btn:hover {
+  background: rgba(255, 165, 0, 0.2);
+  border-color: rgba(255, 165, 0, 0.6);
+  color: #ffc84d;
+}
+
+/* — Avatar clickable — */
+.cs-avatar-clickable {
+  cursor: pointer;
+  transition: box-shadow 0.2s, transform 0.15s;
+}
+.cs-avatar-clickable:hover {
+  transform: scale(1.04);
+}
+.cs-entity-player .cs-avatar-clickable:hover {
+  box-shadow: 0 0 18px rgba(79, 195, 247, 0.35);
+}
+.cs-entity-enemy .cs-avatar-clickable:hover {
+  box-shadow: 0 0 18px rgba(239, 154, 154, 0.35);
+}
+
+.cs-avatar-hint {
+  position: absolute;
+  bottom: 2px;
+  right: 2px;
+  width: 1.3rem;
+  height: 1.3rem;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.65rem;
+  opacity: 0;
+  transition: opacity 0.2s;
+  pointer-events: none;
+}
+.cs-avatar-clickable:hover .cs-avatar-hint { opacity: 1; }
+
+/* — Enemy queue — */
+.cs-enemy-queue {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: 0.25rem;
+}
+
+.cs-queue-label {
+  font-size: 0.6rem;
+  color: rgba(255, 255, 255, 0.35);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  width: 100%;
+  text-align: center;
+  margin-bottom: 0.1rem;
+}
+
+.cs-enemy-thumb {
+  position: relative;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 1px solid rgba(239, 154, 154, 0.3);
+  background: rgba(0, 0, 0, 0.4);
+  flex-shrink: 0;
+}
+
+.cs-thumb-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0.7;
+}
+
+.cs-thumb-count {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  background: rgba(0,0,0,0.75);
+  color: #ef9a9a;
+  font-size: 0.5rem;
+  font-weight: 700;
+  padding: 0 2px;
+  line-height: 1.2;
+  border-radius: 2px;
+}
+
+/* — Player stats popup — */
+.cs-stats-popup {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.82);
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
+  z-index: 10;
+}
+.cs-stats-popup.visible {
+  opacity: 1;
+  pointer-events: all;
+}
+
+.cs-stats-close {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  background: none;
+  border: 1px solid rgba(255,255,255,0.2);
+  border-radius: 50%;
+  width: 1.8rem;
+  height: 1.8rem;
+  color: rgba(255,255,255,0.5);
+  cursor: pointer;
+  font-size: 0.8rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s, color 0.2s;
+}
+.cs-stats-close:hover { background: rgba(255,255,255,0.1); color: #fff; }
+
+.cs-stats-content {
+  background: rgba(15, 10, 25, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 1.25rem 1.5rem;
+  max-width: 340px;
+  width: 90%;
+  max-height: 80vh;
+  overflow-y: auto;
+  color: rgba(255,255,255,0.85);
+}
+
+.cs-stats-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+
+.cs-stats-avatar {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid rgba(255,255,255,0.15);
+}
+
+.cs-stats-title { font-size: 1rem; font-weight: 700; }
+.cs-stats-subtitle { font-size: 0.72rem; color: rgba(255,255,255,0.45); margin-top: 0.15rem; }
+
+.cs-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.4rem;
+  margin-bottom: 0.75rem;
+}
+
+.cs-stat-cell {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 6px;
+  padding: 0.35rem 0.25rem;
+  text-align: center;
+}
+
+.cs-stat-abbr { font-size: 0.6rem; color: rgba(255,255,255,0.4); text-transform: uppercase; display: block; }
+.cs-stat-val  { font-size: 0.95rem; font-weight: 700; color: #f5c842; display: block; line-height: 1.2; }
+.cs-stat-mod  { font-size: 0.65rem; color: rgba(255,255,255,0.45); display: block; }
+
+.cs-stats-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.3rem 0;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+  font-size: 0.78rem;
+}
+.cs-stats-row:last-child { border-bottom: none; }
+.cs-stats-key { color: rgba(255,255,255,0.5); }
+.cs-stats-val { font-weight: 600; color: rgba(255,255,255,0.9); }
+
+/* Enemy stats popup uses enemy detail modal (existing) */
+
+/* — Escape roll result banner — */
+.cs-escape-result {
+  position: absolute;
+  top: 3.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.88);
+  border: 1px solid rgba(255, 165, 0, 0.4);
+  border-radius: 8px;
+  padding: 0.5rem 1.25rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #ffc84d;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+  z-index: 20;
+}
+.cs-escape-result.visible {
+  opacity: 1;
+}
+
 @media (max-width: 600px) {
   .cs-cards-row { padding: 0.6rem 0.5rem 0.4rem; }
   .cs-avatar-frame { width: clamp(58px, 16vw, 88px); height: clamp(58px, 16vw, 88px); }
@@ -6642,4 +6878,5 @@ body.theme-parchment .player-card.active:hover::after { color: rgba(40, 80, 180,
   .cs-topbar { padding: 0.45rem 0.75rem; }
   .cs-narration { padding: 0.5rem; }
   .cs-msg-body { font-size: 0.8rem; padding: 0.45rem 0.55rem; }
+  .cs-escape-btn { font-size: 0.65rem; padding: 0.25rem 0.5rem; }
 }

@@ -196,6 +196,7 @@ document.addEventListener('DOMContentLoaded', () => {
         csImg.src = state.activeEnemy.img;
         csImg.onerror = () => { csImg.onerror = null; csImg.src = 'img/enemigos/goblin-1.png'; };
       }
+      _updateCsEnemyQueue();
     }
   }
   // Exponer para que la IA/DM pueda llamarlo
@@ -658,6 +659,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
   $('cs-close-btn')?.addEventListener('click', () => {
     if (uiState.inCombat) endCombat();
+  });
+
+  $('cs-escape-btn')?.addEventListener('click', _attemptEscape);
+
+  $('cs-player-avatar-frame')?.addEventListener('click', _showCsPlayerStats);
+  $('cs-stats-close')?.addEventListener('click', _hideCsPlayerStats);
+
+  $('cs-enemy-avatar-frame')?.addEventListener('click', () => {
+    if (state.activeEnemy) openEnemyDetailModal();
   });
 
   // ─ Enemy detail modal ───────────────────────────────
@@ -1228,8 +1238,29 @@ document.addEventListener('DOMContentLoaded', () => {
     const csLoc = $('cs-location');
     if (csLoc) csLoc.textContent = loc ? `📍 ${loc}` : '';
 
+    // Populate narration with last few chat messages so context is visible
     const msgs = $('cs-narration-messages');
-    if (msgs) msgs.innerHTML = '';
+    if (msgs) {
+      msgs.innerHTML = '';
+      const recent = Array.from(chatMessages.querySelectorAll('.message.dm-message, .message.player-message')).slice(-5);
+      recent.forEach(msg => {
+        const bodyEl   = msg.querySelector('.msg-body');
+        const avatarEl = msg.querySelector('.msg-avatar');
+        if (!bodyEl || !avatarEl) return;
+        const bodyText = bodyEl.textContent?.trim() || '';
+        if (!bodyText) return; // skip empty/streaming-dots
+        const isDm = msg.classList.contains('dm-message');
+        const csEl = document.createElement('div');
+        csEl.className = `cs-narration-msg ${isDm ? 'cs-narration-dm' : 'cs-narration-player'}`;
+        csEl.innerHTML = `
+          <div class="cs-msg-avatar">${escHtml(avatarEl.textContent || (isDm ? 'DM' : '?'))}</div>
+          <div class="cs-msg-body">${bodyEl.innerHTML}</div>`;
+        msgs.appendChild(csEl);
+      });
+      msgs.scrollTop = msgs.scrollHeight;
+    }
+
+    _updateCsEnemyQueue();
   }
 
   function _csApplyHpColor(fill, pct, isEnemy) {
@@ -1245,6 +1276,107 @@ document.addEventListener('DOMContentLoaded', () => {
       const def = CONDITION_DEFS[key];
       return def ? `<span class="cs-condition-badge" title="${escHtml(def.label)}">${def.emoji || key}</span>` : '';
     }).join('');
+  }
+
+  function _updateCsEnemyQueue() {
+    const queue = $('cs-enemy-queue');
+    if (!queue) return;
+    const groups = state.activeEnemy?.groups || [];
+    const waiting = groups.slice(1); // all except the current one
+    if (waiting.length === 0) { queue.style.display = 'none'; return; }
+    queue.style.display = 'flex';
+    queue.innerHTML = '<span class="cs-queue-label">En espera</span>';
+    waiting.forEach(g => {
+      const thumb = document.createElement('div');
+      thumb.className = 'cs-enemy-thumb';
+      thumb.title = `${g.name}${g.count > 1 ? ` ×${g.count}` : ''}`;
+      thumb.innerHTML = `<img class="cs-thumb-img" src="${escHtml(g.img || 'img/enemigos/goblin-1.png')}" alt="" />
+        ${g.count > 1 ? `<span class="cs-thumb-count">×${g.count}</span>` : ''}`;
+      queue.appendChild(thumb);
+    });
+  }
+
+  function _showCsPlayerStats() {
+    const popup   = $('cs-player-stats-popup');
+    const content = $('cs-stats-content');
+    if (!popup || !content) return;
+
+    const name    = $('char-name')?.value?.trim() || 'Aventurero';
+    const cls     = $('char-class')?.value?.trim() || '—';
+    const lvl     = $('char-level')?.value || '1';
+    const cur     = parseInt(hpCurrent?.value) || 0;
+    const max     = parseInt(hpMax?.value) || 1;
+    const avatarSrc = $('player-avatar-img')?.src || '';
+
+    const attrs = ['str','dex','con','int','wis','cha'];
+    const abbrs = { str:'FUE', dex:'DES', con:'CON', int:'INT', wis:'SAB', cha:'CAR' };
+    const attrHtml = attrs.map(a => {
+      const val = parseInt($(`stat-${a}`)?.value) || 10;
+      const mod = calcMod(val);
+      return `<div class="cs-stat-cell">
+        <span class="cs-stat-abbr">${abbrs[a]}</span>
+        <span class="cs-stat-val">${val}</span>
+        <span class="cs-stat-mod">${fmtMod(mod)}</span>
+      </div>`;
+    }).join('');
+
+    const equipRows = ['arma','armadura','accesorio'].map(slot => {
+      const item = state.equipment[slot];
+      if (!item) return '';
+      const icons = { arma:'⚔', armadura:'🛡', accesorio:'💍' };
+      return `<div class="cs-stats-row"><span class="cs-stats-key">${icons[slot]} ${slot.charAt(0).toUpperCase()+slot.slice(1)}</span><span class="cs-stats-val">${escHtml(item.name)}</span></div>`;
+    }).filter(Boolean).join('');
+
+    content.innerHTML = `
+      <div class="cs-stats-header">
+        <img class="cs-stats-avatar" src="${avatarSrc}" alt="" />
+        <div>
+          <div class="cs-stats-title">${escHtml(name)}</div>
+          <div class="cs-stats-subtitle">${escHtml(cls)} · Nivel ${escHtml(lvl)} · HP ${cur}/${max}</div>
+        </div>
+      </div>
+      <div class="cs-stats-grid">${attrHtml}</div>
+      ${equipRows ? `<div style="margin-top:0.5rem">${equipRows}</div>` : ''}`;
+
+    popup.classList.add('visible');
+    popup.setAttribute('aria-hidden', 'false');
+  }
+
+  function _hideCsPlayerStats() {
+    const popup = $('cs-player-stats-popup');
+    popup?.classList.remove('visible');
+    popup?.setAttribute('aria-hidden', 'true');
+  }
+
+  function _attemptEscape() {
+    if (!state.activeEnemy || !uiState.inCombat) return;
+    const dex    = parseInt($('stat-dex')?.value) || 10;
+    const mod    = calcMod(dex);
+    const roll   = Math.floor(Math.random() * 20) + 1;
+    const total  = roll + mod;
+    const dc     = Math.max(8, (state.activeEnemy.ca || 12) - 2);
+    const escaped = total >= dc;
+
+    const resultEl = $('cs-escape-result');
+    if (resultEl) {
+      resultEl.textContent = escaped
+        ? `🏃 ¡Escapas! D20: ${roll} ${fmtMod(mod)} = ${total} (DC ${dc}) ✓`
+        : `🔒 No escapas — D20: ${roll} ${fmtMod(mod)} = ${total} (DC ${dc}) ✗`;
+      resultEl.style.borderColor = escaped ? 'rgba(80,200,80,0.5)' : 'rgba(200,50,50,0.5)';
+      resultEl.style.color = escaped ? '#80e080' : '#ef9a9a';
+      resultEl.classList.add('visible');
+      setTimeout(() => resultEl.classList.remove('visible'), escaped ? 1200 : 2500);
+    }
+
+    if (escaped) {
+      const escMsg = `Intento escapar del combate (Destreza ${roll}${fmtMod(mod)} = ${total} vs DC ${dc}). ¡Lo consigo y huyo!`;
+      addPlayerMessage(escMsg);
+      setTimeout(() => { addSystemMessage('🏃 Has escapado del combate.'); endCombat(); callDM(escMsg); }, 900);
+    } else {
+      const failMsg = `Intento escapar del combate (Destreza ${roll}${fmtMod(mod)} = ${total} vs DC ${dc}). No lo consigo.`;
+      addPlayerMessage(failMsg);
+      callDM(failMsg);
+    }
   }
 
   $('summon-allies-btn')?.addEventListener('click', () => {
@@ -3254,7 +3386,10 @@ IMPORTANTE: Interpreta a este personaje con coherencia total a su personalidad y
             if (token) {
               fullText += token;
               dmBody.textContent = fullText;
+              if (dmBody._csMirror) dmBody._csMirror.textContent = fullText;
               scrollBottom();
+              const csMsgs = $('cs-narration-messages');
+              if (csMsgs && dmBody._csMirror) csMsgs.scrollTop = csMsgs.scrollHeight;
             }
           } catch { /* fragmento incompleto */ }
         }
