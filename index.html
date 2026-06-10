@@ -528,11 +528,11 @@
   <div id="gameover-overlay" class="gameover-overlay" aria-hidden="true" role="dialog" aria-modal="true">
     <div class="gameover-card">
       <span class="gameover-skull" aria-hidden="true">💀</span>
-      <h2 class="gameover-title">Has caído</h2>
-      <p class="gameover-desc">La oscuridad te envuelve... ¿Vuelves desde el último punto de control o empiezas de nuevo?</p>
+      <h2 class="gameover-title">Tu llama se extingue</h2>
+      <p class="gameover-desc">...en las sombras del Abismo. El frío eterno te abraza.<br>Pero quizás el destino aún no ha terminado contigo.</p>
       <div class="gameover-actions">
-        <button id="btn-load-checkpoint" class="gameover-btn gameover-btn-primary" type="button">⏪ Último punto de control</button>
-        <button id="btn-restart-death"   class="gameover-btn gameover-btn-secondary" type="button">🔄 Nueva partida</button>
+        <button id="btn-load-checkpoint" class="gameover-btn gameover-btn-primary" type="button">☠ Resucitar (penalización)</button>
+        <button id="btn-restart-death"   class="gameover-btn gameover-btn-secondary" type="button">✦ Nueva Aventura</button>
       </div>
     </div>
   </div>
@@ -735,41 +735,92 @@
     </div>
   </div>
 
-  <!-- Modal de Creación de Personaje -->
+  <!-- Modal de Creación de Personaje (2 pasos) -->
   <div class="char-modal-overlay" id="char-modal" role="dialog" aria-modal="true" aria-label="Crear Personaje">
-    <div class="char-modal-card">
+    <div class="char-modal-card char-modal-card--wide" id="char-modal-card">
       <div class="char-modal-header">
         <span class="char-modal-ornament">⚔</span>
         <h2>Crónicas del Abismo</h2>
         <span class="char-modal-ornament">⚔</span>
       </div>
-      <p class="char-modal-subtitle">Antes de comenzar tu aventura, define tu leyenda...</p>
 
-      <div class="char-modal-field">
-        <label for="modal-name">Nombre del Personaje</label>
-        <input type="text" id="modal-name" placeholder="¿Cómo te llaman los bardos?" maxlength="40" autocomplete="off" spellcheck="false" />
+      <!-- ── PASO 1: Selección de aventura ── -->
+      <div id="char-modal-step1" class="char-modal-step">
+        <p class="char-modal-subtitle">Elige tu aventura o lánzate a lo desconocido...</p>
+        <div class="aventuras-grid" id="aventuras-grid">
+          <!-- Renderizado por JS desde window.AVENTURAS -->
+        </div>
+        <div class="aventuras-actions">
+          <button type="button" id="btn-aventura-libre" class="btn-aventura-libre">🎲 Aventura libre</button>
+          <button type="button" id="btn-aventura-continuar" class="btn-aventura-continuar" disabled>Continuar →</button>
+        </div>
       </div>
 
-      <div class="char-modal-field">
-        <label for="modal-class">Clase</label>
-        <select id="modal-class">
-          <option value="">— Elige tu destino —</option>
-          <option value="Guerrero">⚔ Guerrero</option>
-          <option value="Mago">🔮 Mago</option>
-          <option value="Pícaro">🗡 Pícaro</option>
-          <option value="Clérigo">✝ Clérigo</option>
-          <option value="Explorador">🏹 Explorador</option>
-          <option value="Paladín">🛡 Paladín</option>
-          <option value="Bárbaro">🪓 Bárbaro</option>
-          <option value="Bardo">🎵 Bardo</option>
-          <option value="Druida">🌿 Druida</option>
-          <option value="Hechicero">✨ Hechicero</option>
-          <option value="Monje">👊 Monje</option>
-          <option value="Brujo">👁 Brujo</option>
-        </select>
-      </div>
+      <!-- ── PASO 2: Creación de personaje ── -->
+      <div id="char-modal-step2" class="char-modal-step" hidden>
+        <div id="aventura-contexto" class="aventura-contexto" hidden>
+          <span id="aventura-contexto-titulo" class="aventura-contexto-titulo"></span>
+        </div>
+        <p class="char-modal-subtitle">Define tu leyenda...</p>
 
-      <button type="button" class="char-modal-btn" id="modal-start-btn">⚔ Comenzar Aventura</button>
+        <div class="char-modal-field">
+          <label for="modal-name">Nombre del Personaje</label>
+          <input type="text" id="modal-name" placeholder="¿Cómo te llaman los bardos?" maxlength="40" autocomplete="off" spellcheck="false" />
+        </div>
+
+        <div class="char-modal-field">
+          <label for="modal-class">Clase</label>
+          <select id="modal-class">
+            <option value="">— Elige tu destino —</option>
+            <option value="Guerrero">⚔ Guerrero</option>
+            <option value="Mago">🔮 Mago</option>
+            <option value="Pícaro">🗡 Pícaro</option>
+            <option value="Clérigo">✝ Clérigo</option>
+            <option value="Explorador">🏹 Explorador</option>
+            <option value="Paladín">🛡 Paladín</option>
+            <option value="Bárbaro">🪓 Bárbaro</option>
+            <option value="Bardo">🎵 Bardo</option>
+            <option value="Druida">🌿 Druida</option>
+            <option value="Hechicero">✨ Hechicero</option>
+            <option value="Monje">👊 Monje</option>
+            <option value="Brujo">👁 Brujo</option>
+          </select>
+        </div>
+
+        <div class="char-modal-field">
+          <label for="modal-background">Trasfondo</label>
+          <select id="modal-background">
+            <option value="">— Sin trasfondo definido —</option>
+            <option value="Soldado">⚔ Soldado</option>
+            <option value="Forajido">🏴 Forajido</option>
+            <option value="Sabio">📚 Sabio</option>
+            <option value="Nobles Venidos a Menos">👑 Nobles Venidos a Menos</option>
+            <option value="Huérfano de las Calles">🏚 Huérfano de las Calles</option>
+            <option value="Ermitaño">🌿 Ermitaño</option>
+            <option value="Marinero">⚓ Marinero</option>
+            <option value="Artesano">🔨 Artesano</option>
+          </select>
+        </div>
+
+        <div class="char-modal-field">
+          <label for="modal-motivation">Motivación</label>
+          <select id="modal-motivation">
+            <option value="">— Sin motivación definida —</option>
+            <option value="Venganza personal">🔥 Venganza personal</option>
+            <option value="Búsqueda de gloria">⚔ Búsqueda de gloria</option>
+            <option value="Pura supervivencia">🗡 Pura supervivencia</option>
+            <option value="Sed de conocimiento">📚 Sed de conocimiento</option>
+            <option value="Proteger a los inocentes">🛡 Proteger a los inocentes</option>
+            <option value="Riqueza y poder">💰 Riqueza y poder</option>
+            <option value="Redención de un pecado pasado">🕯 Redención de un pecado pasado</option>
+          </select>
+        </div>
+
+        <div class="char-modal-step2-actions">
+          <button type="button" id="btn-modal-back" class="btn-modal-back">← Volver</button>
+          <button type="button" class="char-modal-btn" id="modal-start-btn">⚔ Comenzar Aventura</button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -777,8 +828,11 @@
   <script src="src/utils.js"></script>
   <script src="src/audio.js"></script>
   <script src="src/prompt.js"></script>
-<script src="stats-clases.js"></script>
+  <script src="stats-clases.js"></script>
   <script src="bestiario.js"></script>
+  <script src="src/aventuras.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="src/dice3d.js"></script>
   <script src="app.js"></script>
 
   <!-- Panel debug oculto — activar con 7 taps en el número de nivel -->

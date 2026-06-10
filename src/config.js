@@ -8,7 +8,7 @@ window._RPG = window._RPG || {};
 Object.assign(window._RPG, {
 
   MAX_TOKENS:    1400,
-  HISTORY_LIMIT: 8,
+  HISTORY_LIMIT: 14,
 
   SKILLS: [
     { id: 'athletics',     label: 'Atletismo',      attr: 'str' },
